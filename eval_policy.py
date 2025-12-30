@@ -8,6 +8,10 @@ from flax.serialization import from_bytes
 from rlpd.agents import SACLearner
 from agxcave.agxenvs.utils.parse_cfg import parse_env_cfg
 import agxcave.agxtasks  # registriert Tasks
+import torch
+
+import jax
+import jax.numpy as jnp
 
 TASK_NAME = "AgxCave-Rock-Capturing-Vision-v0"
 
@@ -77,15 +81,26 @@ def run_policy(save_dir, episodes=5, headless=True):
         obs = convert_obs(obs)
         done = False
         ep_return = 0.0
-        
+                
         while not done:
             action, _ = agent.sample_actions(obs)
-            next_obs, reward, terminated, truncated, info = env.step([action[0],action[1],action[2],0,0])
-            next_obs = convert_obs(next_obs)
+
+            obs_jax = jnp.array(obs)[None]
+
+            q_values = agent.eval_actions(obs_jax)
+            # shape: (1, num_qs)
+
+            q_min = jnp.min(q_values, axis=-1)[0]
+            print(f"Q(s, π(s)) = {float(q_min):.3f}")
+
+            next_obs, reward, terminated, truncated, info = env.step(
+                [action[0], action[1], action[2], 0, 0]
+            )
+
+            obs = convert_obs(next_obs)
             done = terminated or truncated
             ep_return += reward
-            obs = next_obs
-        
+
         print(f"Episode {ep+1}: Return = {ep_return:.2f}")
 
 if __name__ == "__main__":
