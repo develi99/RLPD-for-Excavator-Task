@@ -5,8 +5,9 @@ import tensorflow_probability
 
 from rlpd.distributions.tanh_transformed import TanhTransformedDistribution
 
-tfp = tensorflow_probability.substrates.jax
+import tensorflow_probability.substrates.jax as tfp
 tfd = tfp.distributions
+
 
 import flax.linen as nn
 import jax.numpy as jnp

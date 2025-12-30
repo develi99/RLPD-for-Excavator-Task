@@ -1,89 +1,121 @@
-# train_offline2online.py
 import gym
 import numpy as np
+
+import os
+# os.environ["WANDB_MODE"] = "disabled"
 import wandb
 
 from rlpd.agents import SACLearner
 from rlpd.data import ReplayBuffer
 
-from excavator_env import ExcavatorEnv
-
 import pickle
-import numpy as np
-
-import pickle
-import numpy as np
 import glob
 import os
 
 
+import gymnasium as gym
+from agxcave.agxenvs.utils.parse_cfg import parse_env_cfg
+import agxcave.agxtasks  # registriert Tasks
+from gym.spaces import Box
+import jax
+from flax.serialization import to_bytes
+from datetime import datetime
+from configs.rlpd_config import get_config
+from rlpd.wrappers import wrap_gym # not working for our environment
+
+
+TASK_NAME = "AgxCave-Rock-Capturing-Vision-v0"
+path_to_demo = "../offline2online_praktikum_ws2526/demonstrations_no_images"
+
+def flatten_field(x):
+    if hasattr(x, "detach"):  # PyTorch Tensor
+        x = x.detach().cpu().numpy()
+    return np.asarray(x, dtype=np.float32).ravel()
+
+
+def make_agx_env(headless=True, render_mode=None, device="cpu"):
+    cfg = parse_env_cfg(
+        TASK_NAME,
+        device=device,
+        headless=headless,
+        render_mode=render_mode,
+    )
+
+    env = gym.make(
+        TASK_NAME,
+        cfg=cfg,
+        agx_args=[],
+    )
+    return env
+
+
+def convert_obs(obs):
+    return np.concatenate([
+        flatten_field(obs["policy"].flatten()[:3]),
+        flatten_field(obs["stone"]),
+        flatten_field(obs["bucket"]),
+        # flatten_field(obs["cabin_position"])
+    ])
+
 
 class OfflineDataset:
     def __init__(self, path):
-        # Alle .pkl Dateien mit dem Muster laden
+        # Get all demo files
         files = sorted(glob.glob(os.path.join(path, "demonstration_*.pkl")))
-        all_frames = []
+
+        # Storage lists
+        obs_list = []
+        actions_list = []
+        rewards_list = []
+        next_obs_list = []
+        dones_list = []
 
         for file_path in files:
             with open(file_path, "rb") as f:
-                frames = pickle.load(f)
-                all_frames.extend(frames)
+                demo = pickle.load(f)  # load demo
 
-        self.obs = []
-        self.actions = []
-        self.rewards = []
-        self.next_obs = []
-        self.dones = []
+            prev_obs = None
+            prev_reward = 0.0
+            prev_done = False
 
-        for i, frame in enumerate(all_frames):
-            # Observation zusammenstellen
-            obs = np.concatenate([
-                frame["rgb_cabine"].flatten(),
-                frame["depth_cabine"].flatten(),
-                frame["state"],
-                frame["target"],
-                frame["stone_pos"],
-                frame["bucket_pos"],
-                frame["cabin_pos"],
-                np.array([frame["cabin_pitch"]])
-            ])
-            self.obs.append(obs)
-            self.actions.append(frame["action"])
+            for i, frame in enumerate(demo):
+                # Build observation (state + stone + bucket)
+                obs = np.concatenate([
+                    flatten_field(frame["state"])[:3],
+                    flatten_field(frame["stone_pos"]),
+                    flatten_field(frame["bucket_pos"]),
+                ])
 
-            # Reward und done
-            if i == len(all_frames) - 1:
-                reward = 100.0 if frame["stone_pos"][2] >= 1.5 else 0.0
-                done = True
-            else:
+                # Action (first 3 components)
+                action = frame["action"][:3]
+
                 reward = 0.0
                 done = False
 
-            self.rewards.append(reward)
-            self.dones.append(done)
+                if prev_obs is not None:
+                    # store next_obs for previous step
+                    next_obs_list.append(obs)
+                    rewards_list.append(prev_reward)
+                    dones_list.append(prev_done)
 
-            # next_obs
-            if i < len(all_frames) - 1:
-                next_frame = all_frames[i + 1]
-                next_obs = np.concatenate([
-                    next_frame["rgb_cabine"].flatten(),
-                    next_frame["depth_cabine"].flatten(),
-                    next_frame["state"],
-                    next_frame["target"],
-                    next_frame["stone_pos"],
-                    next_frame["bucket_pos"],
-                    next_frame["cabin_pos"],
-                    np.array([next_frame["cabin_pitch"]])
-                ])
-            else:
-                next_obs = obs
-            self.next_obs.append(next_obs)
+                # store current step
+                obs_list.append(obs)
+                actions_list.append(action)
+                prev_obs = obs
+                prev_reward = reward
+                prev_done = done
 
-        # in numpy arrays umwandeln
-        self.obs = np.array(self.obs)
-        self.actions = np.array(self.actions)
-        self.rewards = np.array(self.rewards)
-        self.next_obs = np.array(self.next_obs)
-        self.dones = np.array(self.dones)
+            # End of demo: final next_obs, reward, done
+            next_obs_list.append(prev_obs)
+            rewards_list.append(100.0 if demo[-1]["stone_pos"][2] >= 1.5 else 0.0)
+            dones_list.append(True)
+
+        # Convert to numpy arrays
+        self.obs = np.array(obs_list, dtype=np.float32)
+        self.actions = np.array(actions_list, dtype=np.float32)
+        self.rewards = np.array(rewards_list, dtype=np.float32)
+        self.next_obs = np.array(next_obs_list, dtype=np.float32)
+        self.dones = np.array(dones_list, dtype=np.float32)
 
         self.size = self.obs.shape[0]
 
@@ -95,82 +127,262 @@ class OfflineDataset:
             "rewards": self.rewards[idx],
             "next_observations": self.next_obs[idx],
             "dones": self.dones[idx],
-            "masks": 1.0 - self.dones[idx],
+            "masks": 1.0 - self.dones[idx],  # 0 if done, else 1
         }
 
 
+def evaluate_policy(agent, env, episodes=3):
+    returns = []
+    for _ in range(episodes):
+        obs, _ = env.reset()
+        obs = convert_obs(obs)
+        done = False
+        ep_return = 0.0
+
+        while not done:
+            action, agent = agent.sample_actions(obs)
+            next_obs, reward, terminated, truncated, info = env.step(
+                [action[0], action[1], action[2], 0, 0]
+            )
+            next_obs = convert_obs(next_obs)
+            done = terminated or truncated
+            ep_return += reward
+            obs = next_obs
+
+        returns.append(ep_return)
+
+    return np.mean(returns)
+
+# own implementation but works also with different offline ratios
+def combine_batches(offline_batch, online_batch, shuffle=True):
+    combined = {}
+
+    for k in offline_batch:
+        offline_data = offline_batch[k]
+        online_data = online_batch[k]
+
+        if isinstance(offline_data, dict):
+            # Recursion for nested dics
+            combined[k] = combine_batches(offline_data, online_data, shuffle=shuffle)
+        else:
+            # combine
+            combined_data = np.concatenate([offline_data, online_data], axis=0)
+
+            if shuffle:
+                perm = np.random.permutation(combined_data.shape[0])
+                combined_data = combined_data[perm]
+
+            combined[k] = combined_data
+
+    return combined
+
+# original, but only works with offline_ratio 0.5 else there is a error
+def combine(one_dict, other_dict):
+    combined = {}
+
+    for k, v in one_dict.items():
+        if isinstance(v, dict):
+            combined[k] = combine(v, other_dict[k])
+        else:
+            tmp = np.empty(
+                (v.shape[0] + other_dict[k].shape[0], *v.shape[1:]), dtype=v.dtype
+            )
+            tmp[0::2] = v
+            tmp[1::2] = other_dict[k]
+            combined[k] = tmp
+
+    return combined
 
 
-def combine(offline, online):
-    batch = {}
-    for k in offline:
-        batch[k] = np.concatenate([offline[k], online[k]], axis=0)
-    return batch
+def save_training_state(agent, replay_buffer, save_dir, step):
+    os.makedirs(save_dir, exist_ok=True)
+
+    # Agent speichern
+    agent_path = os.path.join(save_dir, f"agent_checkpoint_{step}.ckpt")
+    with open(agent_path, "wb") as f:
+        f.write(to_bytes(agent))
+    print(f"[Checkpoint] Agent saved to {agent_path}")
+
+    # Replay Buffer speichern
+    buffer_path = os.path.join(save_dir, f"replay_buffer_{step}.pkl")
+    with open(buffer_path, "wb") as f:
+        pickle.dump(replay_buffer, f)
+    print(f"[Checkpoint] Replay buffer saved to {buffer_path}")
+
+# normalize actions, action space of env is [-2, 2]
+def normalize_actions(a, low=-2.0, high=2.0):
+    return 2 * (a - low) / (high - low) - 1
 
 
+def main(data_path, save_dir="training_runs"):
+        
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    save_dir = os.path.join(save_dir, f"run_{timestamp}")
+    os.makedirs(save_dir, exist_ok=True)
 
 
-def main(data_path):
-    wandb.init(project="offline2online_excavator")
-
-    env = ExcavatorEnv()
-    eval_env = ExcavatorEnv()
-
-    dataset = OfflineDataset(data_path)
-
-    agent = SACLearner.create(
-        seed=0,
-        observation_space=env.observation_space,
-        action_space=env.action_space,
-    )
-
-    replay_buffer = ReplayBuffer(
-        env.observation_space, env.action_space, capacity=1_000_000
-    )
-
-    offline_ratio = 0.5
+    # ===============================
+    # Hyperparameter
+    # ===============================
     batch_size = 256
-    start_training = 10_000
-    max_steps = 200_000
+    offline_ratio = 0.5
+    start_training = 5_000
+    max_steps = 300_000
+    pretrain_steps = 0
+    utd_ratio = 20
+    eval_interval = 10_000
 
-    obs = env.reset()
+    config = get_config()
+    config.hidden_dims=(256, 256, 256)
+    kwargs = dict(config)
+    model_cls = kwargs.pop("model_cls")
+    config.num_min_qs=1
+    config.backup_entropy=False
 
+    wandb.init(
+        project="rlpd",
+        name=f"SparseReward",
+        config={**dict(config), 
+            "batch_size": batch_size,
+            "offline_ratio": offline_ratio,
+            "start_training": start_training,
+            "max_steps": max_steps,
+            "pretrain_steps": pretrain_steps,
+            "utd_ratio": utd_ratio,
+            "eval_interval": eval_interval}
+    )
+
+    # ===============================
+    # AGX Environments
+    # ===============================
+    env = make_agx_env(headless=True)
+
+    print("loading data")
+    dataset = OfflineDataset(data_path)
+    
+    print("create agent and replay buffer")
+    # low_obs = np.min(dataset.obs, axis=0)
+    # high_obs = np.max(dataset.obs, axis=0)
+    # observation_space_flat = Box(low=low_obs, high=high_obs, dtype=np.float32)
+    observation_space_flat = Box(low=-np.inf, high=np.inf, shape=dataset.obs[0].shape, dtype=np.float32)
+
+    # low_act = np.min(dataset.actions, axis=0)
+    # high_act = np.max(dataset.actions, axis=0)
+    # action_space_flat = Box(low=low_act, high=high_act, dtype=np.float32)
+    action_space_flat = Box(low=-2.0, high=2.0, shape=dataset.actions[0].shape, dtype=np.float32)
+
+    # init Agent
+    agent = globals()[model_cls].create(
+        seed=0,
+        observation_space=observation_space_flat,
+        action_space=action_space_flat,
+        **kwargs
+    )
+
+    # init Replay Buffer
+    replay_buffer = ReplayBuffer(
+        observation_space=observation_space_flat,
+        action_space=action_space_flat,
+        capacity=max_steps
+    )
+
+
+    # ===============================
+    # Offline Pretraining
+    # ===============================
+    print("Starting offline pretraining...")
+    for step in range(0,pretrain_steps):
+        batch = dataset.sample(batch_size * utd_ratio)
+        batch["actions"] = normalize_actions(batch["actions"], low=-2.0, high=2.0)
+        agent, info = agent.update(batch, utd_ratio=utd_ratio)
+        print(f"step {step} done")
+        if step % 1000 == 0:
+            wandb.log(
+                {f"offline_pretrain/{k}": v for k, v in info.items()},
+                step=step
+            )
+
+        if step > 0 and step % eval_interval == 0:
+            avg_return = evaluate_policy(agent, env)
+            wandb.log(
+                {"offline_pretrain/eval_return": avg_return},
+                step=step
+            )
+
+
+    # ===============================
+    # Online + Mixed Training
+    # ===============================
+    print("Starting online trainig...")
+    obs, _ = env.reset()
+    obs = convert_obs(obs)
     for step in range(max_steps):
 
-        # ---- interact ----
+        # ---- interaction ----
         if step < start_training:
             action = env.action_space.sample()
+            action = action[:3]
+            action = normalize_actions(action, low=-2.0, high=2.0)
         else:
             action, agent = agent.sample_actions(obs)
+            
+        next_obs, reward, terminated, truncated, info = env.step([action[0]*2,action[1]*2,action[2]*2,0,0]) # upscaling because of normalization
+        next_obs = convert_obs(next_obs)
 
-        next_obs, reward, done, _ = env.step(action)
+        done = terminated or truncated
 
+        if terminated:
+            mask = 0.0
+        else:
+            mask = 1.0
+        
         replay_buffer.insert(
             dict(
                 observations=obs,
                 actions=action,
                 rewards=reward,
                 dones=done,
-                masks=1.0,
+                masks=mask,
                 next_observations=next_obs,
             )
         )
 
-        obs = next_obs if not done else env.reset()
+        obs = next_obs
+        if done:
+            obs, _ = env.reset()
+            obs = convert_obs(obs)
 
         # ---- training ----
         if step >= start_training:
-            online = replay_buffer.sample(int(batch_size * (1 - offline_ratio)))
-            offline = dataset.sample(int(batch_size * offline_ratio))
+            online = replay_buffer.sample(
+                int(batch_size * utd_ratio * (1 - offline_ratio))
+            )
+            offline = dataset.sample(
+                int(batch_size * utd_ratio * offline_ratio)
+            )
+            offline["actions"] = normalize_actions(offline["actions"], low=-2.0, high=2.0)
 
             batch = combine(offline, online)
-
-            agent, info = agent.update(batch, utd_ratio=1)
+            agent, info = agent.update(batch, utd_ratio=utd_ratio)
 
             if step % 1000 == 0:
-                wandb.log(info, step=step)
+                wandb.log(
+                    {f"training/{k}": v for k, v in info.items()},
+                    step=step + pretrain_steps
+                )
+                print(step)
 
+        # ---- evaluation ----
+        if step % eval_interval == 0 and step >= start_training:
+            avg_return = evaluate_policy(agent, env)
+            wandb.log(
+                {"evaluation/avg_return": avg_return},
+                step=step + pretrain_steps
+            )
+            save_training_state(agent=agent, replay_buffer=replay_buffer, save_dir=save_dir, step=step)
 
+    print("Training done")
+    save_training_state(agent=agent, replay_buffer=replay_buffer, save_dir=save_dir, step=step)
+    
 if __name__ == "__main__":
-    import sys
-    main(sys.argv[1])
+    main(path_to_demo)

@@ -131,3 +131,7 @@ dmypy.json
 # wandb
 wandb
 MUJOCO_LOG.TXT
+
+
+# own
+/training_runs
