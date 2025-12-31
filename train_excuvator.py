@@ -234,10 +234,10 @@ def main(data_path, save_dir="training_runs"):
 
     config = get_config()
     config.hidden_dims=(256, 256, 256)
-    kwargs = dict(config)
-    model_cls = kwargs.pop("model_cls")
     config.num_min_qs=1
     config.backup_entropy=False
+    kwargs = dict(config)
+    model_cls = kwargs.pop("model_cls")
 
     wandb.init(
         project="rlpd",
