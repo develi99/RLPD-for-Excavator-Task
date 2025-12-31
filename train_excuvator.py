@@ -53,7 +53,7 @@ def convert_obs(obs):
     return np.concatenate([
         flatten_field(obs["policy"].flatten()[:3]),
         flatten_field(obs["stone"]),
-        flatten_field(obs["bucket"]),
+        # flatten_field(obs["bucket"]),
         # flatten_field(obs["cabin_position"])
     ])
 
@@ -83,7 +83,7 @@ class OfflineDataset:
                 obs = np.concatenate([
                     flatten_field(frame["state"])[:3],
                     flatten_field(frame["stone_pos"]),
-                    flatten_field(frame["bucket_pos"]),
+                    # flatten_field(frame["bucket_pos"]),
                 ])
 
                 # Action (first 3 components)
@@ -140,7 +140,7 @@ def evaluate_policy(agent, env, episodes=3):
         ep_return = 0.0
 
         while not done:
-            action, agent = agent.sample_actions(obs)
+            action = agent.eval_actions(obs)
             next_obs, reward, terminated, truncated, info = env.step(
                 [action[0], action[1], action[2], 0, 0]
             )
@@ -233,7 +233,7 @@ def main(data_path, save_dir="training_runs"):
     eval_interval = 10_000
 
     config = get_config()
-    config.hidden_dims=(256, 256, 256)
+    config.hidden_dims=(256, 256)
     config.num_min_qs=1
     config.backup_entropy=False
     kwargs = dict(config)

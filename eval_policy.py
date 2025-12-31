@@ -9,6 +9,8 @@ from rlpd.agents import SACLearner
 from agxcave.agxenvs.utils.parse_cfg import parse_env_cfg
 import agxcave.agxtasks  # registriert Tasks
 import torch
+from configs.rlpd_config import get_config
+
 
 import jax
 import jax.numpy as jnp
@@ -38,7 +40,7 @@ def convert_obs(obs):
     return np.concatenate([
         flatten_field(obs["policy"].flatten()[:3]),
         flatten_field(obs["stone"]),
-        flatten_field(obs["bucket"]),
+        # flatten_field(obs["bucket"]),
         # flatten_field(obs["cabin_position"]),
         # flatten_field(obs["cabin_pitch"])
     ])
@@ -63,17 +65,25 @@ def run_policy(save_dir, episodes=5, headless=True):
     observation_space_flat = Box(low=-np.inf, high=np.inf, shape=obs_flat.shape, dtype=np.float32)
     # action_sample = env.action_space.sample()
     # action_space_flat = Box(low=env.action_space.low, high=env.action_space.high, dtype=np.float32)
-    action_space_flat = Box(low=-1.0, high=1.0, shape=(3,), dtype=np.float32)
+    action_space_flat = Box(low=-2.0, high=2.0, shape=(3,), dtype=np.float32)
 
-    # 2️⃣ Agent initialisieren
-    agent_template = SACLearner.create(
+    config = get_config()
+    config.hidden_dims=(256, 256)
+    config.num_min_qs=1
+    config.backup_entropy=False
+    kwargs = dict(config)
+    model_cls = kwargs.pop("model_cls")
+
+    agent = globals()[model_cls].create(
         seed=0,
         observation_space=observation_space_flat,
-        action_space=action_space_flat
+        action_space=action_space_flat,
+        **kwargs
     )
-    
+
+
     # 3️⃣ Checkpoint laden
-    agent = load_checkpoint(agent_template, save_dir)
+    agent = load_checkpoint(agent, save_dir)
     
     # 4️⃣ Policy ausführen
     for ep in range(episodes):
@@ -83,18 +93,10 @@ def run_policy(save_dir, episodes=5, headless=True):
         ep_return = 0.0
                 
         while not done:
-            action, _ = agent.sample_actions(obs)
-
-            obs_jax = jnp.array(obs)[None]
-
-            q_values = agent.eval_actions(obs_jax)
-            # shape: (1, num_qs)
-
-            q_min = jnp.min(q_values, axis=-1)[0]
-            print(f"Q(s, π(s)) = {float(q_min):.3f}")
+            action = agent.eval_actions(obs)
 
             next_obs, reward, terminated, truncated, info = env.step(
-                [action[0], action[1], action[2], 0, 0]
+                [action[0]*2, action[1]*2, action[2]*2, 0, 0]
             )
 
             obs = convert_obs(next_obs)
