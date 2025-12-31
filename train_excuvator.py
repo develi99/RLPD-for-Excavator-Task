@@ -58,6 +58,24 @@ def convert_obs(obs):
     ])
 
 
+def calc_reward(obs):
+    stone_pos = obs["stone_pos"]
+    z = stone_pos[2]
+    target_z = 1.7
+
+    # distance to target height
+    dist = z - target_z
+    reward = -abs(dist)
+
+    # If proper height reached
+    if z >= 1.5:
+        reward += 10
+
+    return reward
+
+
+
+
 class OfflineDataset:
     def __init__(self, path):
         # Get all demo files
@@ -77,6 +95,8 @@ class OfflineDataset:
             prev_obs = None
             prev_reward = 0.0
             prev_done = False
+
+            print(len(demo))
 
             for i, frame in enumerate(demo):
                 # Build observation (state + stone + bucket)
@@ -102,12 +122,13 @@ class OfflineDataset:
                 obs_list.append(obs)
                 actions_list.append(action)
                 prev_obs = obs
-                prev_reward = reward
+                prev_reward = calc_reward(frame)
                 prev_done = done
 
             # End of demo: final next_obs, reward, done
             next_obs_list.append(prev_obs)
-            rewards_list.append(100.0 if demo[-1]["stone_pos"][2] >= 1.5 else 0.0)
+            last_reward = 200.0 if demo[-1]["stone_pos"][2] >= 1.5 else 0.0
+            rewards_list.append(prev_reward + last_reward)
             dones_list.append(True)
 
         # Convert to numpy arrays
@@ -227,7 +248,7 @@ def main(data_path, save_dir="training_runs"):
     batch_size = 256
     offline_ratio = 0.5
     start_training = 5_000
-    max_steps = 300_000
+    max_steps = 1_500_000
     pretrain_steps = 0
     utd_ratio = 20
     eval_interval = 10_000
