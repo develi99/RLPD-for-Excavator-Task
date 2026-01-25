@@ -11,7 +11,9 @@ from rlpd.networks import default_init
 class PixelMultiplexer(nn.Module):
     encoder_cls: Type[nn.Module]
     network_cls: Type[nn.Module]
-    latent_dim: int
+    # latent_dim: int
+    latent_dim_pixels: int
+    latent_dim_state:int
     stop_gradient: bool = False
     pixel_keys: Tuple[str, ...] = ("pixels",)
     depth_keys: Tuple[str, ...] = ()
@@ -44,7 +46,7 @@ class PixelMultiplexer(nn.Module):
                 # We do not update conv layers with policy gradients.
                 x = jax.lax.stop_gradient(x)
 
-            x = nn.Dense(self.latent_dim, kernel_init=default_init())(x)
+            x = nn.Dense(self.latent_dim_pixels, kernel_init=default_init())(x)
             x = nn.LayerNorm()(x)
             x = nn.tanh(x)
             xs.append(x)
@@ -52,7 +54,7 @@ class PixelMultiplexer(nn.Module):
         x = jnp.concatenate(xs, axis=-1)
 
         if "state" in observations:
-            y = nn.Dense(self.latent_dim, kernel_init=default_init())(
+            y = nn.Dense(self.latent_dim_state, kernel_init=default_init())(
                 observations["state"]
             )
             y = nn.LayerNorm()(y)

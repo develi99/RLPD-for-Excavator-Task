@@ -15,4 +15,8 @@ def batched_random_crop(key, obs, pixel_key, padding=4):
     imgs = obs[pixel_key]
     keys = jax.random.split(key, imgs.shape[0])
     imgs = jax.vmap(random_crop, (0, 0, None))(keys, imgs, padding)
-    return obs.copy(add_or_replace={pixel_key: imgs})
+
+    new_obs = obs.copy()
+    new_obs[pixel_key] = imgs
+    return new_obs
+    # return obs.copy(add_or_replace={pixel_key: imgs})

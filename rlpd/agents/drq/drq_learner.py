@@ -40,14 +40,16 @@ def _unpack(batch):
 
 
 def _share_encoder(source, target):
-    replacers = {}
+    # replacers = {}
+    new_params = target.params.copy()
 
     for k, v in source.params.items():
         if "encoder" in k:
-            replacers[k] = v
+            # replacers[k] = v
+            new_params[k] = v
 
     # Use critic conv layers in actor:
-    new_params = target.params.copy(add_or_replace=replacers)
+    # new_params = target.params.copy(add_or_replace=replacers)
     return target.replace(params=new_params)
 
 
@@ -58,8 +60,10 @@ class DrQLearner(SACLearner):
     def create(
         cls,
         seed: int,
-        observation_space: gym.Space,
-        action_space: gym.Space,
+        # observation_space: gym.Space,
+        # action_space: gym.Space,
+        actions = None, # pass example instead of Sapce
+        observations = None, # pass example instead of Sapce
         actor_lr: float = 3e-4,
         critic_lr: float = 3e-4,
         temp_lr: float = 3e-4,
@@ -67,7 +71,9 @@ class DrQLearner(SACLearner):
         cnn_filters: Sequence[int] = (3, 3, 3, 3),
         cnn_strides: Sequence[int] = (2, 1, 1, 1),
         cnn_padding: str = "VALID",
-        latent_dim: int = 50,
+        # latent_dim: int = 50,
+        latent_dim_pixels = 100, # Picture is much more complex
+        latent_dim_state = 20, #state less
         encoder: str = "d4pg",
         hidden_dims: Sequence[int] = (256, 256),
         discount: float = 0.99,
@@ -86,9 +92,10 @@ class DrQLearner(SACLearner):
         An implementation of the version of Soft-Actor-Critic described in https://arxiv.org/abs/1812.05905
         """
 
-        action_dim = action_space.shape[-1]
-        observations = observation_space.sample()
-        actions = action_space.sample()
+        # action_dim = action_space.shape[-1]
+        # observations = observation_space.sample()
+        # actions = action_space.sample()
+        action_dim = actions.shape[-1]
 
         if target_entropy is None:
             target_entropy = -action_dim / 2
@@ -112,7 +119,9 @@ class DrQLearner(SACLearner):
         actor_def = PixelMultiplexer(
             encoder_cls=encoder_cls,
             network_cls=actor_cls,
-            latent_dim=latent_dim,
+            # latent_dim=latent_dim,
+            latent_dim_pixels=latent_dim_pixels,
+            latent_dim_state=latent_dim_state,
             stop_gradient=True,
             pixel_keys=pixel_keys,
             depth_keys=depth_keys,
@@ -136,7 +145,8 @@ class DrQLearner(SACLearner):
         critic_def = PixelMultiplexer(
             encoder_cls=encoder_cls,
             network_cls=critic_cls,
-            latent_dim=latent_dim,
+            latent_dim_pixels=latent_dim_pixels,
+            latent_dim_state=latent_dim_state,
             pixel_keys=pixel_keys,
             depth_keys=depth_keys,
         )
@@ -197,12 +207,15 @@ class DrQLearner(SACLearner):
         observations = self.data_augmentation_fn(key, batch["observations"])
         rng, key = jax.random.split(rng)
         next_observations = self.data_augmentation_fn(key, batch["next_observations"])
-        batch = batch.copy(
-            add_or_replace={
-                "observations": observations,
-                "next_observations": next_observations,
-            }
-        )
+        # batch = batch.copy(
+        #     add_or_replace={
+        #         "observations": observations,
+        #         "next_observations": next_observations,
+        #     }
+        # )
+        batch = batch.copy()
+        batch["observations"] = observations
+        batch["next_observations"] = next_observations
 
         new_agent = new_agent.replace(rng=rng)
 

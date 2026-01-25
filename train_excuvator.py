@@ -25,7 +25,7 @@ from rlpd.wrappers import wrap_gym # not working for our environment
 
 
 TASK_NAME = "AgxCave-Rock-Capturing-Vision-v0"
-path_to_demo = "../offline2online_praktikum_ws2526/demonstrations_no_images"
+path_to_demo = "../offline2online_praktikum_ws2526/demonstrations_no_images_reseted_env"
 
 def flatten_field(x):
     if hasattr(x, "detach"):  # PyTorch Tensor
@@ -152,27 +152,74 @@ class OfflineDataset:
         }
 
 
-def evaluate_policy(agent, env, episodes=3):
+def evaluate_policy(agent, env, episodes=25):
     returns = []
+    successes = []
+    over_boundarys = []
+    falled_down = []
+    end_positions = []
+
     for _ in range(episodes):
         obs, _ = env.reset()
         obs = convert_obs(obs)
         done = False
         ep_return = 0.0
+        success = False
+        over_boundary = False
+        fall_down = False
+        end_position = 0.0
 
         while not done:
             action = agent.eval_actions(obs)
             next_obs, reward, terminated, truncated, info = env.step(
                 [action[0], action[1], action[2], 0, 0]
             )
-            next_obs = convert_obs(next_obs)
+
+            stone_pos = next_obs["stone"]
+            z = stone_pos[0][2]
+            end_position = z
+
+            if z >= 1.5:
+                over_boundary = True
+
+
+            if over_boundary and z <= 1.0:
+                fall_down = True
+
+
+            rock_stable = info.get('extras', None)["Step_Reward/rock_stable"]
+            if rock_stable == 12000.0:
+                success = True
+            
+
             done = terminated or truncated
             ep_return += reward
+
+            next_obs = convert_obs(next_obs)
             obs = next_obs
 
         returns.append(ep_return)
+        successes.append(success)
+        over_boundarys.append(over_boundary)
+        falled_down.append(fall_down)
+        end_positions.append(end_position)
 
-    return np.mean(returns)
+
+    mean_return = np.mean(returns)
+
+    success_ratio = np.mean(successes)
+    over_boundary_ratio = np.mean(over_boundarys)
+    fall_down_ratio = np.mean(falled_down)
+    ends = np.mean(end_positions)
+
+    return {
+        "mean_return": mean_return,
+        "success_ratio": success_ratio,
+        "over_boundary_ratio": over_boundary_ratio,
+        "fall_down_ratio": fall_down_ratio,
+        "mean_end_position": ends
+    }
+
 
 # own implementation but works also with different offline ratios
 def combine_batches(offline_batch, online_batch, shuffle=True):
@@ -248,10 +295,10 @@ def main(data_path, save_dir="training_runs"):
     batch_size = 256
     offline_ratio = 0.5
     start_training = 5_000
-    max_steps = 1_500_000
+    max_steps = 1_000_000
     pretrain_steps = 0
     utd_ratio = 20
-    eval_interval = 10_000
+    eval_interval = 50_000
 
     config = get_config()
     config.hidden_dims=(256, 256)
@@ -395,9 +442,15 @@ def main(data_path, save_dir="training_runs"):
 
         # ---- evaluation ----
         if step % eval_interval == 0 and step >= start_training:
-            avg_return = evaluate_policy(agent, env)
+            eval_results = evaluate_policy(agent, env)
             wandb.log(
-                {"evaluation/avg_return": avg_return},
+                {
+                    "evaluation/avg_return": eval_results["mean_return"],
+                    "evaluation/success_ratio": eval_results["success_ratio"],
+                    "evaluation/over_boundary_ratio": eval_results["over_boundary_ratio"],
+                    "evaluation/fall_down_ratio": eval_results["fall_down_ratio"],
+                    "evaluation/mean_end_position": eval_results["mean_end_position"]
+                },
                 step=step + pretrain_steps
             )
             save_training_state(agent=agent, replay_buffer=replay_buffer, save_dir=save_dir, step=step)
