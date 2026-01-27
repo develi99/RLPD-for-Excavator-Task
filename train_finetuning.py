@@ -61,7 +61,7 @@ flags.DEFINE_boolean(
 
 config_flags.DEFINE_config_file(
     "config",
-    "configs/sac_config.py",
+    "configs/rlpd_config.py",
     "File path to the training hyperparameter configuration.",
     lock_config=False,
 )
@@ -102,18 +102,12 @@ def main(_):
     wandb.init(project=FLAGS.project_name)
     wandb.config.update(FLAGS)
 
-    exp_prefix = f"s{FLAGS.seed}_{FLAGS.pretrain_steps}pretrain"
-    if hasattr(FLAGS.config, "critic_layer_norm") and FLAGS.config.critic_layer_norm:
-        exp_prefix += "_LN"
-
-    log_dir = os.path.join(FLAGS.log_dir, exp_prefix)
-
     if FLAGS.checkpoint_model:
-        chkpt_dir = os.path.join(log_dir, "checkpoints")
+        chkpt_dir = os.path.join(FLAGS.log_dir, "checkpoints")
         os.makedirs(chkpt_dir, exist_ok=True)
 
     if FLAGS.checkpoint_buffer:
-        buffer_dir = os.path.join(log_dir, "buffers")
+        buffer_dir = os.path.join(FLAGS.log_dir, "buffers")
         os.makedirs(buffer_dir, exist_ok=True)
 
     # env = gym.make(FLAGS.env_name)

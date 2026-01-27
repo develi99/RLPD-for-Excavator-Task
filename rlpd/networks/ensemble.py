@@ -31,7 +31,8 @@ def subsample_ensemble(key: jax.random.PRNGKey, params, num_sample: int, num_qs:
             ens_params = jax.tree_util.tree_map(
                 lambda param: param[indx], params["Ensemble_0"]
             )
-            params = params.copy(add_or_replace={"Ensemble_0": ens_params})
+            params = params.copy()
+            params["Ensemble_0"] = ens_params
         else:
             params = jax.tree_util.tree_map(lambda param: param[indx], params)
     return params

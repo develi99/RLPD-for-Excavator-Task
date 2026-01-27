@@ -69,7 +69,8 @@ flags.DEFINE_string("save_dir", None, "Directory to save checkpoints.")
 flags.DEFINE_integer("utd_ratio", 5, "Update to data ratio.")
 config_flags.DEFINE_config_file(
     "config",
-    "configs/drq_config.py",
+    "configs/rlpd_pixels_config.py",
+    # "configs/drq_config.py",
     "File path to the training hyperparameter configuration.",
     lock_config=False,
 )

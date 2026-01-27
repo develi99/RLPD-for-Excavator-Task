@@ -3,6 +3,7 @@ import pickle
 import numpy as np
 import gymnasium
 from agxcave.agxenvs.utils.parse_cfg import parse_env_cfg
+import agx
 import agxcave.agxtasks  # registers tasks
 import cv2
 
@@ -177,6 +178,7 @@ def make_agx_env_and_dataset(env_name, demo_dir, image_size=64, num_stack=3, pix
     #         "teleoperation_cfg_entry_point": f"{BASE}.teleoperation_cfg",
     #     },
     # )
+    agx.setNumThreads(10)
     cfg = parse_env_cfg(
         env_name,
         device="cpu",
