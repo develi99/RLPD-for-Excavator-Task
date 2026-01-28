@@ -9,6 +9,7 @@ from absl import app, flags
 from flax.core import FrozenDict
 from ml_collections import config_flags
 from flax.core import unfreeze
+from rlpd.data.replay_buffer_sample import ReplayBufferSample
 
 try:
     from flax.training import checkpoints
@@ -18,7 +19,7 @@ except:
 import pickle
 import wandb
 from rlpd.agents import DrQLearner
-from rlpd.data import MemoryEfficientReplayBuffer, ReplayBuffer
+from rlpd.data import MemoryEfficientReplayBuffer
 from rlpd.data.vd4rl_datasets import VD4RLDataset
 from rlpd.evaluation import evaluate, evaluate_policy
 from rlpd.wrappers import WANDBVideo, wrap_pixels
@@ -199,7 +200,7 @@ def main(_):
             }
         )
     else:
-        replay_buffer = ReplayBuffer(
+        replay_buffer = ReplayBufferSample(
             observation_sample=ds["observations"][0], action_sample=ds["actions"][0], capacity=replay_buffer_size
         )
         # replay_buffer_iterator = replay_buffer.get_iterator(

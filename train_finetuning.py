@@ -54,7 +54,7 @@ flags.DEFINE_boolean("checkpoint_model", True, "Save agent checkpoint on evaluat
 flags.DEFINE_boolean(
     "checkpoint_buffer", False, "Save agent replay buffer on evaluation."
 )
-flags.DEFINE_integer("utd_ratio", 10, "Update to data ratio.")
+flags.DEFINE_integer("utd_ratio", 20, "Update to data ratio.")
 flags.DEFINE_boolean(
     "binary_include_bc", True, "Whether to include BC data in the binary datasets."
 )
@@ -124,7 +124,9 @@ def main(_):
     # eval_env.seed(FLAGS.seed + 42)
     env, eval_env, ds, _ = make_agx_env_and_dataset(FLAGS.env_name, FLAGS.demo_dir)
     action_space_flat = Box(low=-2.0, high=2.0, shape=ds["actions"][0].shape, dtype=np.float32)
+    action_space_flat.seed(FLAGS.seed + 42)
     observation_space_flat = Box(low=-np.inf, high=np.inf, shape=ds["observations"][0].shape, dtype=np.float32)
+    observation_space_flat.seed(FLAGS.seed + 42)
 
     kwargs = dict(FLAGS.config)
     model_cls = kwargs.pop("model_cls")
@@ -234,7 +236,7 @@ def main(_):
             #     num_episodes=FLAGS.eval_episodes,
             #     save_video=FLAGS.save_video,
             # )
-            eval_info = evaluate_policy(agent, eval_env, episodes=FLAGS.eval_episodes)
+            eval_info = evaluate_policy(agent, eval_env, episodes=FLAGS.eval_episodes, pixel=False)
 
             for k, v in eval_info.items():
                 wandb.log({f"evaluation/{k}": v}, step=i + FLAGS.pretrain_steps)

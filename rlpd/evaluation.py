@@ -32,7 +32,10 @@ def evaluate_policy(agent, env, episodes=25, pixel=False):
 
     for _ in trange(episodes, desc="Episodes"):
         obs, _ = env.reset()
-        obs = convert_obs_pixel(obs)
+        if pixel:
+            obs = convert_obs_pixel(obs)
+        else:
+            obs = convert_obs(obs)
         done = False
         ep_return = 0.0
         success = False

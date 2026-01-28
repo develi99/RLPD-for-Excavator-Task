@@ -8,6 +8,21 @@ import numpy as np
 
 from rlpd.data.dataset import Dataset, DatasetDict
 
+#own implementation
+def _init_replay_dict_from_sample(sample, capacity):
+    """
+    Baut ReplayBuffer-Storage rekursiv aus einem Beispiel-Sample.
+    """
+
+    if isinstance(sample, dict):
+        return {
+            k: _init_replay_dict_from_sample(v, capacity)
+            for k, v in sample.items()
+        }
+
+    sample = np.asarray(sample)
+    return np.empty((capacity, *sample.shape), dtype=sample.dtype)
+
 
 def _init_replay_dict(
     obs_space: gym.Space, capacity: int
@@ -36,23 +51,64 @@ def _insert_recursively(
         raise TypeError()
 
 
-class ReplayBuffer(Dataset):
+# class ReplayBuffer(Dataset):
+#     def __init__(
+#         self,
+#         observation_space: gym.Space,
+#         action_space: gym.Space,
+#         capacity: int,
+#         next_observation_space: Optional[gym.Space] = None,
+#     ):
+#         if next_observation_space is None:
+#             next_observation_space = observation_space
+
+#         observation_data = _init_replay_dict(observation_space, capacity)
+#         next_observation_data = _init_replay_dict(next_observation_space, capacity)
+#         dataset_dict = dict(
+#             observations=observation_data,
+#             next_observations=next_observation_data,
+#             actions=np.empty((capacity, *action_space.shape), dtype=action_space.dtype),
+#             rewards=np.empty((capacity,), dtype=np.float32),
+#             masks=np.empty((capacity,), dtype=np.float32),
+#             dones=np.empty((capacity,), dtype=bool),
+#         )
+
+#         super().__init__(dataset_dict)
+
+#         self._size = 0
+#         self._capacity = capacity
+#         self._insert_index = 0
+
+class ReplayBufferSample(Dataset):
     def __init__(
         self,
-        observation_space: gym.Space,
-        action_space: gym.Space,
+        observation_sample,
+        action_sample,
         capacity: int,
-        next_observation_space: Optional[gym.Space] = None,
+        next_observation_sample: Optional = None, # type: ignore
     ):
-        if next_observation_space is None:
-            next_observation_space = observation_space
+        """
+        observation_sample: ein einzelnes obs (Dict / ndarray)
+        action_sample: ein einzelnes action array
+        """
 
-        observation_data = _init_replay_dict(observation_space, capacity)
-        next_observation_data = _init_replay_dict(next_observation_space, capacity)
+        if next_observation_sample is None:
+            next_observation_sample = observation_sample
+
+        observation_data = _init_replay_dict_from_sample(
+            observation_sample, capacity
+        )
+        next_observation_data = _init_replay_dict_from_sample(
+            next_observation_sample, capacity
+        )
+
         dataset_dict = dict(
             observations=observation_data,
             next_observations=next_observation_data,
-            actions=np.empty((capacity, *action_space.shape), dtype=action_space.dtype),
+            actions=np.empty(
+                (capacity, *action_sample.shape),
+                dtype=action_sample.dtype,
+            ),
             rewards=np.empty((capacity,), dtype=np.float32),
             masks=np.empty((capacity,), dtype=np.float32),
             dones=np.empty((capacity,), dtype=bool),
