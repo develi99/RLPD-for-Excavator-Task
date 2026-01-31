@@ -140,8 +140,8 @@ class DrQLearner(SACLearner):
             dropout_rate=critic_dropout_rate,
             use_layer_norm=critic_layer_norm,
         )
-        critic_cls = partial(StateActionValue, base_cls=critic_base_cls)
-        critic_cls = partial(Ensemble, net_cls=critic_cls, num=num_qs)
+        critic_core_cls = partial(StateActionValue, base_cls=critic_base_cls)
+        critic_cls = partial(Ensemble, net_cls=critic_core_cls, num=num_qs)
         critic_def = PixelMultiplexer(
             encoder_cls=encoder_cls,
             network_cls=critic_cls,
@@ -156,8 +156,17 @@ class DrQLearner(SACLearner):
             params=critic_params,
             tx=optax.adam(learning_rate=critic_lr),
         )
+        critic_target_cls = partial(Ensemble, net_cls=critic_core_cls, num=num_min_qs or num_qs)
+        critic_target_def = PixelMultiplexer(
+            encoder_cls=encoder_cls,
+            network_cls=critic_target_cls,
+            latent_dim_pixels=latent_dim_pixels,
+            latent_dim_state=latent_dim_state,
+            pixel_keys=pixel_keys,
+            depth_keys=depth_keys,
+        )
         target_critic = TrainState.create(
-            apply_fn=critic_def.apply,
+            apply_fn=critic_target_def.apply,
             params=critic_params,
             tx=optax.GradientTransformation(lambda _: None, lambda _: None),
         )

@@ -95,7 +95,6 @@ def run_policy(save_dir, episodes=5, headless=True, pixel=False, action_repeat=2
     # config.backup_entropy=False
 
     if pixel:
-        
         action_space_flat = Box(low=-2.0, high=2.0, shape=(3,), dtype=np.float32)
         
         config = get_config_pixels()

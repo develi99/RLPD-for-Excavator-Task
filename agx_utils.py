@@ -68,7 +68,7 @@ def demos_to_dataset(demos):
                 if z_stone >= 1.5:
                     rew += 200.0
 
-            rewards.append(rew)
+            rewards.append(rew / 60.0)
 
             terminals.append(float(t == T - 1))
             next_obs.append(np.concatenate(
