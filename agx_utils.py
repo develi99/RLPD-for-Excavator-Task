@@ -6,6 +6,8 @@ from agxcave.agxenvs.utils.parse_cfg import parse_env_cfg
 import agx
 import agxcave.agxtasks  # registers tasks
 import cv2
+from rewards import calc_reward1 as calc_reward
+import agxcave.agxtasks.excavator.rock_capturing.config.rock_capturing_cfg as agxrewards
 
 
 # normalize actions, action space of env is [-2, 2]
@@ -19,22 +21,6 @@ def denormalize_actions(a, low=-2.0, high=2.0):
     # Affine inverse map back to [low, high]
     action = low + (a + 1.0) * 0.5 * (high - low)
     return np.clip(action, low, high)
-
-
-def calc_reward(obs):
-    stone_pos = obs["stone_pos"]
-    z = stone_pos[2]
-    target_z = 1.7
-
-    # distance to target height
-    dist = z - target_z
-    reward = -abs(dist)
-
-    # If proper height reached
-    if z >= 1.5:
-        reward += 10
-
-    return reward
 
 
 def load_demo_pickles(demo_dir):
@@ -60,15 +46,10 @@ def demos_to_dataset(demos):
                 [traj[t]["state"][:3], traj[t]["stone_pos"]],
                 axis=-1
             ))
-            actions.append(traj[t]["action"][:3])
+            actions.append(50*-traj[t]["action"][:3])
             
-            rew = calc_reward(traj[t])
-            if t == T - 1:
-                z_stone = traj[t]["stone_pos"][2]
-                if z_stone >= 1.5:
-                    rew += 200.0
-
-            rewards.append(rew / 60.0)
+            rew = calc_reward(traj[t], t == T-1)
+            rewards.append(rew)
 
             terminals.append(float(t == T - 1))
             next_obs.append(np.concatenate(
@@ -168,7 +149,38 @@ def demos_to_pixel_dataset(demos, num_stack=3, img_size=64):
     return dataset
 
 
-def make_agx_env_and_dataset(env_name, demo_dir, image_size=64, num_stack=3, pixel=False):
+def make_agx_env(headless=True, render_mode=None, device="cpu", reward=1, env_name="AgxCave-Rock-Capturing-Vision-v0"):
+
+    cfg = parse_env_cfg(
+        env_name,
+        device=device,
+        headless=headless,
+        render_mode=render_mode,
+    )
+
+    reward_map = {
+        1: agxrewards.RockRewards1Cfg,
+        2: agxrewards.RockRewards2Cfg,
+        3: agxrewards.RockRewards3Cfg,
+        4: agxrewards.RockRewards4Cfg,
+        5: agxrewards.RockRewards5Cfg,
+    }
+
+    if reward not in reward_map:
+        raise ValueError(f"Unknown reward config: {reward}")
+
+    cfg.rewards = reward_map[reward]()   # instantiate selected config
+
+    env = gymnasium.make(
+        env_name,
+        cfg=cfg,
+        agx_args=[],
+    )
+
+    return env
+
+
+def make_agx_env_and_dataset(env_name, demo_dir, image_size=64, num_stack=3, pixel=False, reward=1):
     # gymnasium.register(
     #     id="AgxCave-Rock-Capturing-Vision-v0",
     #     entry_point="agxcave.agxenvs:ManagerBasedEnv",
@@ -178,16 +190,7 @@ def make_agx_env_and_dataset(env_name, demo_dir, image_size=64, num_stack=3, pix
     #         "teleoperation_cfg_entry_point": f"{BASE}.teleoperation_cfg",
     #     },
     # )
-    agx.setNumThreads(10)
-    cfg = parse_env_cfg(
-        env_name,
-        device="cpu",
-        headless=True,
-        render_mode=None,
-    )
-
-    env = gymnasium.make(env_name, cfg=cfg, agx_args=[])
-    eval_env = None
+    env = make_agx_env(env_name=env_name, reward=reward)
 
     demos = load_demo_pickles(demo_dir)
     

@@ -1,5 +1,9 @@
 #! /usr/bin/env python
 import os
+
+# os.environ["WANDB_MODE"] = "disabled"
+import wandb
+
 import pickle
 
 # import d4rl
@@ -17,7 +21,6 @@ except:
     print("Not loading checkpointing functionality.")
 from ml_collections import config_flags
 
-import wandb
 from rlpd.agents import SACLearner
 from rlpd.data import ReplayBuffer
 # from rlpd.data.d4rl_datasets import D4RLDataset
@@ -28,13 +31,14 @@ except:
     print("not importing binary dataset")
 from rlpd.evaluation import evaluate, evaluate_policy
 from rlpd.wrappers import wrap_gym
-from agx_utils import convert_obs, load_demo_pickles, demos_to_dataset, make_agx_env_and_dataset, sample_batch
+from agx_utils import convert_obs, load_demo_pickles, demos_to_dataset, make_agx_env_and_dataset, sample_batch, normalize_actions
 from gym.spaces import Box
 
 
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string("project_name", "rlpd", "wandb project name.")
+flags.DEFINE_string("name", "rlpdrun", "wandb run name.")
 flags.DEFINE_string("env_name", "AgxCave-Rock-Capturing-Vision-v0", "D4rl dataset name.")
 flags.DEFINE_string("demo_dir", "../offline2online_praktikum_ws2526/demonstrations_no_images_reseted_env/", "Directory containing demonstration pickles.")
 flags.DEFINE_float("offline_ratio", 0.5, "Offline ratio.")
@@ -55,6 +59,7 @@ flags.DEFINE_boolean(
     "checkpoint_buffer", False, "Save agent replay buffer on evaluation."
 )
 flags.DEFINE_integer("utd_ratio", 20, "Update to data ratio.")
+flags.DEFINE_integer("agxreward", 1, "Update to data ratio.")
 flags.DEFINE_boolean(
     "binary_include_bc", True, "Whether to include BC data in the binary datasets."
 )
@@ -65,19 +70,6 @@ config_flags.DEFINE_config_file(
     "File path to the training hyperparameter configuration.",
     lock_config=False,
 )
-
-# normalize actions, action space of env is [-2, 2]
-def normalize_actions(a, low=-2.0, high=2.0):
-    # Affine map to [-1, 1]
-    action = 2.0 * (a - low) / (high - low) - 1.0
-    return np.clip(action, -1.0, 1.0)
-
-# For case -2,2 you can simply multiply 2
-def denormalize_actions(a, low=-2.0, high=2.0):
-    # Affine inverse map back to [low, high]
-    action = low + (a + 1.0) * 0.5 * (high - low)
-    return np.clip(action, low, high)
-
 
 def combine(one_dict, other_dict):
     combined = {}
@@ -99,7 +91,7 @@ def combine(one_dict, other_dict):
 def main(_):
     assert FLAGS.offline_ratio >= 0.0 and FLAGS.offline_ratio <= 1.0
 
-    wandb.init(project=FLAGS.project_name)
+    wandb.init(project=FLAGS.project_name, name=FLAGS.name)
     wandb.config.update(FLAGS)
 
     if FLAGS.checkpoint_model:
@@ -122,7 +114,7 @@ def main(_):
     # eval_env = gym.make(FLAGS.env_name)
     # eval_env = wrap_gym(eval_env, rescale_actions=True)
     # eval_env.seed(FLAGS.seed + 42)
-    env, eval_env, ds, _ = make_agx_env_and_dataset(FLAGS.env_name, FLAGS.demo_dir)
+    env, eval_env, ds, _ = make_agx_env_and_dataset(FLAGS.env_name, FLAGS.demo_dir, reward=FLAGS.agxreward)
     action_space_flat = Box(low=-2.0, high=2.0, shape=ds["actions"][0].shape, dtype=np.float32)
     action_space_flat.seed(FLAGS.seed + 42)
     observation_space_flat = Box(low=-np.inf, high=np.inf, shape=ds["observations"][0].shape, dtype=np.float32)
@@ -170,7 +162,7 @@ def main(_):
     done = False
     observation = convert_obs(observation)
     for i in tqdm.tqdm(
-        range(0, FLAGS.max_steps), smoothing=0.1, disable=not FLAGS.tqdm
+        range(0, FLAGS.max_steps+1), smoothing=0.1, disable=not FLAGS.tqdm
     ):
         if i < FLAGS.start_training:
             action = action_space_flat.sample()
@@ -181,6 +173,16 @@ def main(_):
 
         next_obs, reward, terminated, truncated, info = env.step([action[0]*2, action[1]*2 ,action[2]*2 ,0 ,0]) # upscaling because of normalization
         next_obs = convert_obs(next_obs)
+
+        # logging useful metrics from info dict
+        env_info = {}
+        for key, value in info.items():
+            if key.startswith("distance"):
+                env_info[key] = value
+        
+        # always log this at every step
+        wandb.log({f'env/{k}': v for k, v in env_info.items()}, step=i)
+
 
         done = terminated or truncated
 
@@ -255,6 +257,7 @@ def main(_):
                         pickle.dump(replay_buffer, f, pickle.HIGHEST_PROTOCOL)
                 except:
                     print("Could not save agent buffer.")
+
 
 
 if __name__ == "__main__":
