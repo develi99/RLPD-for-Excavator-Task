@@ -238,7 +238,7 @@ def main(_):
             #     num_episodes=FLAGS.eval_episodes,
             #     save_video=FLAGS.save_video,
             # )
-            eval_info = evaluate_policy(agent, eval_env, episodes=FLAGS.eval_episodes, pixel=False)
+            eval_info = evaluate_policy(agent, env, episodes=FLAGS.eval_episodes, pixel=False)
 
             for k, v in eval_info.items():
                 wandb.log({f"evaluation/{k}": v}, step=i + FLAGS.pretrain_steps)

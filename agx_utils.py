@@ -6,7 +6,7 @@ from agxcave.agxenvs.utils.parse_cfg import parse_env_cfg
 import agx
 import agxcave.agxtasks  # registers tasks
 import cv2
-from rewards import calc_reward1 as calc_reward
+from rewards import calc_reward5 as calc_reward
 import agxcave.agxtasks.excavator.rock_capturing.config.rock_capturing_cfg as agxrewards
 
 
@@ -87,15 +87,7 @@ def demos_to_pixel_dataset(demos, num_stack=3, img_size=64):
             frame = cv2.resize(frame, (img_size, img_size), interpolation=cv2.INTER_AREA)
             frame_buffer.append(frame)
 
-            # fill at beginning to fullfill num_stacks
-            if len(frame_buffer) < num_stack:
-                while len(frame_buffer) < num_stack:
-                    frame_buffer.insert(0, frame)
-            else:
-                frame_buffer = frame_buffer[-num_stack:]  # letzten num_stack Frames behalten
 
-            # Stack entlang letzter Achse -> (H, W, 3, num_stack)
-            imgs = np.stack(frame_buffer, axis=-1)
 
             obs.append(
                 {
@@ -169,7 +161,7 @@ def make_agx_env(headless=True, render_mode=None, device="cpu", reward=1, env_na
     if reward not in reward_map:
         raise ValueError(f"Unknown reward config: {reward}")
 
-    cfg.rewards = reward_map[reward]()   # instantiate selected config
+    cfg.rewards = reward_map[reward]()
 
     env = gymnasium.make(
         env_name,
@@ -181,15 +173,7 @@ def make_agx_env(headless=True, render_mode=None, device="cpu", reward=1, env_na
 
 
 def make_agx_env_and_dataset(env_name, demo_dir, image_size=64, num_stack=3, pixel=False, reward=1):
-    # gymnasium.register(
-    #     id="AgxCave-Rock-Capturing-Vision-v0",
-    #     entry_point="agxcave.agxenvs:ManagerBasedEnv",
-    #     disable_env_checker=True,
-    #     kwargs={
-    #         "env_cfg_entry_point": f"{ROCK_CONFIG}.rock_capturing_vision_cfg:RockCapturingVisionEnvCfg",
-    #         "teleoperation_cfg_entry_point": f"{BASE}.teleoperation_cfg",
-    #     },
-    # )
+
     env = make_agx_env(env_name=env_name, reward=reward)
 
     demos = load_demo_pickles(demo_dir)

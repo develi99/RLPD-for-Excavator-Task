@@ -59,7 +59,7 @@ def load_checkpoint(agent_template, checkpoint_path, jax=True, step=150000):
 
 def run_policy(save_dir, episodes=5, headless=False, jax=False, step=150000, pixel=False, action_repeat=2, num_stack=3, image_size=64, reward=1):
     # 1️⃣ Environment erstellen
-    env = make_agx_env(headless=headless, render_mode="human", reward=reward)
+    env = make_agx_env(headless=False, render_mode="human", reward=reward)
     if pixel:
         if action_repeat > 1:
             env = RepeatAction(env, action_repeat)
@@ -101,7 +101,7 @@ def run_policy(save_dir, episodes=5, headless=False, jax=False, step=150000, pix
         kwargs = dict(config)
         model_cls = kwargs.pop("model_cls")
         agent = globals()[model_cls].create(
-            seed=42,
+            seed=0,
             observation_space=observation_space_flat,
             action_space=action_space_flat,
             **kwargs
@@ -239,7 +239,8 @@ def main():
         action_repeat=args.action_repeat,
         num_stack=args.num_stack,
         image_size=args.image_size,
-        reward=args.reward
+        reward=args.reward,
+        headless=False
     )
 
 

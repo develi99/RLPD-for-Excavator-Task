@@ -136,3 +136,5 @@ MUJOCO_LOG.TXT
 # own
 /training_runs
 /logs
+
+train_excuvator.py
