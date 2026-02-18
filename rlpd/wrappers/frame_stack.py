@@ -95,8 +95,8 @@ class FrameStack(gym.Wrapper):
                             interpolation=cv2.INTER_AREA)
         return frame
     
-    def reset(self):
-        obs, _ = self.env.reset()
+    def reset(self, seed=0):
+        obs, _ = self.env.reset(seed=seed)
 
         frame = self._process_frame(obs["camera"]["rgb"])
         for _ in range(self.num_stack):

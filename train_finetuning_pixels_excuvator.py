@@ -21,18 +21,21 @@ import wandb
 from rlpd.agents import DrQLearner
 from rlpd.data import MemoryEfficientReplayBuffer
 from rlpd.data.vd4rl_datasets import VD4RLDataset
-from rlpd.evaluation import evaluate, evaluate_policy
+from rlpd.evaluation import evaluate_policy
 from rlpd.wrappers import WANDBVideo, wrap_pixels
-from agx_utils import convert_obs, load_demo_pickles, demos_to_dataset, make_agx_env_and_dataset, sample_batch, normalize_actions, convert_obs_pixel, sample_pixel_batch
+from agx_utils import make_agx_env_and_dataset, normalize_actions, convert_obs_pixel, sample_pixel_batch, set_global_seed
 from gym.spaces import Box
 
 # Env Wrapper
 from rlpd.wrappers.repeat_action import RepeatAction
 from rlpd.wrappers.frame_stack import FrameStack
+from configs.rlpd_pixels_config import get_config
 
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string("project_name", "rlpd_pixels", "wandb project name.")
+flags.DEFINE_string("name", "rlpdrun", "wandb run name.")
+flags.DEFINE_integer("agxreward", 1, "Update to data ratio.")
 flags.DEFINE_string("env_name", "AgxCave-Rock-Capturing-Vision-v0", "D4rl dataset name.")
 flags.DEFINE_string("demo_dir", "../offline2online_praktikum_ws2526/demonstrations_downscaled_reseted_env/", "Directory containing demonstration pickles.")
 
@@ -68,18 +71,17 @@ flags.DEFINE_boolean(
 flags.DEFINE_boolean("save_video", False, "Save videos during evaluation.")
 flags.DEFINE_string("save_dir", None, "Directory to save checkpoints.")
 flags.DEFINE_integer("utd_ratio", 5, "Update to data ratio.")
-config_flags.DEFINE_config_file(
-    "config",
-    "configs/rlpd_pixels_config.py",
-    # "configs/drq_config.py",
-    "File path to the training hyperparameter configuration.",
-    lock_config=False,
-)
 flags.DEFINE_boolean("checkpoint_model", True, "Save agent checkpoint on evaluation.")
 flags.DEFINE_boolean(
     "checkpoint_buffer", False, "Save agent replay buffer on evaluation."
 )
 
+config_flags.DEFINE_config_file(
+    "config",
+    "configs/rlpd_pixels_config.py",
+    "File path to the traning hyperparameter configuration.",
+    lock_config=False
+)
 
 PLANET_ACTION_REPEAT = {
     "cartpole-swingup-v0": 8,
@@ -128,8 +130,9 @@ def combine(one_dict, other_dict):
 
 
 def main(_):
-    wandb.init(project=FLAGS.project_name)
+    wandb.init(project=FLAGS.project_name, name=FLAGS.name)
     wandb.config.update(FLAGS)
+    set_global_seed(seed=FLAGS.seed)
 
     if FLAGS.checkpoint_model:
         chkpt_dir = os.path.join(FLAGS.log_dir, "checkpoints")
@@ -155,13 +158,15 @@ def main(_):
             camera_id=camera_id,
         )
 
-    env, _, ds, _ = make_agx_env_and_dataset(FLAGS.env_name, FLAGS.demo_dir, image_size=FLAGS.image_size, num_stack=3, pixel=True)
+    env, _, ds, _ = make_agx_env_and_dataset(FLAGS.env_name, FLAGS.demo_dir, image_size=FLAGS.image_size, num_stack=3, pixel=True, reward=FLAGS.agxreward)
     if action_repeat > 1:
         env = RepeatAction(env, action_repeat)
     if FLAGS.num_stack is not None:
         env = FrameStack(env, num_stack=FLAGS.num_stack, img_size=FLAGS.image_size)
     
     action_space_flat = Box(low=-2.0, high=2.0, shape=ds["actions"][0].shape, dtype=np.float32)
+    action_space_flat.seed(FLAGS.seed)
+
     # env = gym.make(FLAGS.env_name)
     # env, pixel_keys = wrap(env)
     # env = gym.wrappers.RecordEpisodeStatistics(env, deque_size=1)
@@ -211,11 +216,12 @@ def main(_):
         #     }
         # )
 
-    replay_buffer.seed(FLAGS.seed)
+    # replay_buffer.seed(FLAGS.seed)
 
     # Crashes on some setups if agent is created before replay buffer.
     kwargs = dict(FLAGS.config)
     model_cls = kwargs.pop("model_cls")
+    print(model_cls)
     agent = globals()[model_cls].create(
         seed=FLAGS.seed,
         observations=ds["observations"][0],
@@ -224,7 +230,7 @@ def main(_):
         **kwargs,
     )
 
-    observation, _ = env.reset()
+    observation, _ = env.reset(seed=FLAGS.seed)
     done = False
     observation = convert_obs_pixel(observation)
     for i in tqdm.tqdm(
@@ -262,7 +268,7 @@ def main(_):
         observation = next_obs
 
         if done:
-            observation, _ = env.reset()
+            observation, _ = env.reset(seed=FLAGS.seed)
             done = False
             observation = convert_obs_pixel(observation)
             # for k, v in info["episode"].items():

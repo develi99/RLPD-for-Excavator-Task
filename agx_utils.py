@@ -21,7 +21,6 @@ def set_global_seed(seed: int):
     # Python hash seed (wichtig für dict ordering etc.)
     os.environ["PYTHONHASHSEED"] = str(seed)
 
-
 # normalize actions, action space of env is [-2, 2]
 def normalize_actions(a, low=-2.0, high=2.0):
     # Affine map to [-1, 1]
