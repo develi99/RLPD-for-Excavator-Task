@@ -1,5 +1,21 @@
 import torch
 
+
+def calc_reward(obs, last, reward=5):
+    if reward == 1:
+        return calc_reward1(obs, last)
+    elif reward == 2:
+        return calc_reward2(obs, last)
+    elif reward == 3:
+        return calc_reward3(obs, last)
+    elif reward == 4:
+        return calc_reward4(obs, last)
+    elif reward == 5:
+        return calc_reward5(obs, last)
+    else:
+        raise ValueError(f"Unknown reward type: {reward}")
+
+
 def calc_reward1(obs, last):
     stone_pos = obs["stone_pos"]
     bucket_pos = obs["bucket_pos"]

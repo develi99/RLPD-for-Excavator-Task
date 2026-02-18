@@ -15,8 +15,8 @@ import torch
 from configs.rlpd_config import get_config
 from configs.rlpd_pixels_config import get_config as get_config_pixels
 from flax.training import checkpoints
-from agx_utils import convert_obs, convert_obs_pixel, make_agx_env
-from rlpd.evaluation import evaluate_policy, log_evaluation
+from agx_utils import convert_obs, convert_obs_pixel, make_agx_env, set_global_seed
+from rlpd.evaluation import log_evaluation
 import argparse
 import jax
 import jax.numpy as jnp
@@ -57,8 +57,9 @@ def load_checkpoint(agent_template, checkpoint_path, jax=True, step=150000):
         print(f"Loaded checkpoint: {checkpoint_path}")
         return agent
 
-def run_policy(save_dir, episodes=5, headless=False, jax=False, step=150000, pixel=False, action_repeat=2, num_stack=3, image_size=64, reward=1):
+def run_policy(save_dir, episodes=5, jax=False, step=150000, pixel=False, action_repeat=2, num_stack=3, image_size=64, reward=1, seed=0):
     # 1️⃣ Environment erstellen
+    set_global_seed(seed)
     env = make_agx_env(headless=False, render_mode="human", reward=reward)
     if pixel:
         if action_repeat > 1:
@@ -66,9 +67,11 @@ def run_policy(save_dir, episodes=5, headless=False, jax=False, step=150000, pix
         if num_stack is not None:
             env = FrameStack(env, num_stack=num_stack, img_size=image_size)
 
+    for i in range(300):
+        env.reset(seed=seed)
 
     # Dummy observation_space/action_space (nur für Agent.create)
-    obs_sample, _ = env.reset()
+    obs_sample, _ = env.reset(seed=seed)
     if pixel:
         obs_sample = convert_obs_pixel(obs_sample)
     else:
@@ -81,7 +84,7 @@ def run_policy(save_dir, episodes=5, headless=False, jax=False, step=150000, pix
         kwargs = dict(config)
         model_cls = kwargs.pop("model_cls")
         agent = globals()[model_cls].create(
-            seed=0,
+            seed=seed,
             observations = obs_sample,
             actions = action_space_flat.sample(),
             **kwargs
@@ -101,7 +104,7 @@ def run_policy(save_dir, episodes=5, headless=False, jax=False, step=150000, pix
         kwargs = dict(config)
         model_cls = kwargs.pop("model_cls")
         agent = globals()[model_cls].create(
-            seed=0,
+            seed=seed,
             observation_space=observation_space_flat,
             action_space=action_space_flat,
             **kwargs
@@ -109,7 +112,7 @@ def run_policy(save_dir, episodes=5, headless=False, jax=False, step=150000, pix
 
     agent = load_checkpoint(agent, save_dir, jax=jax, step=step)
 
-    log_evaluation(agent, env, episodes, pixel, True)
+    log_evaluation(agent, env, episodes, pixel, True, seed=seed)
 
     # Old Code
     # 4️⃣ Policy ausführen
@@ -206,6 +209,13 @@ def main():
         help="Image resolution (default: 64)"
     )
 
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=0,
+        help="Seed"
+    )
+
     # boolean flags
     parser.add_argument(
         "--jax",
@@ -240,7 +250,7 @@ def main():
         num_stack=args.num_stack,
         image_size=args.image_size,
         reward=args.reward,
-        headless=False
+        seed=args.seed
     )
 
 

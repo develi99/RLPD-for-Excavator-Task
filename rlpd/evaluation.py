@@ -45,9 +45,9 @@ def get_rewards(info, show=False):
     return rewards
 
 
-def log_evaluation(agent, env, episodes=25, pixel=False, show_reward=True):
+def log_evaluation(agent, env, episodes=25, pixel=False, show_reward=True, seed=0):
 
-    results = evaluate_policy(agent, env, episodes, pixel, show_reward)
+    results = evaluate_policy(agent, env, episodes, pixel, show_reward, seed=seed)
 
     print("\n" + "="*50)
     print("EVALUATION RESULTS")
@@ -80,7 +80,7 @@ def log_evaluation(agent, env, episodes=25, pixel=False, show_reward=True):
     return results
 
 
-def evaluate_policy(agent, env, episodes=25, pixel=False, show_rewards=False):
+def evaluate_policy(agent, env, episodes=25, pixel=False, show_rewards=False, seed=0):
     reward_storage = defaultdict(list)
     returns = []
     successes = []
@@ -89,7 +89,7 @@ def evaluate_policy(agent, env, episodes=25, pixel=False, show_rewards=False):
     end_positions = []
 
     for _ in trange(episodes, desc="Episodes"):
-        obs, _ = env.reset()
+        obs, _ = env.reset(seed=seed)
         if pixel:
             obs = convert_obs_pixel(obs)
         else:

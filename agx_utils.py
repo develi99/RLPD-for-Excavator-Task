@@ -6,8 +6,20 @@ from agxcave.agxenvs.utils.parse_cfg import parse_env_cfg
 import agx
 import agxcave.agxtasks  # registers tasks
 import cv2
-from rewards import calc_reward5 as calc_reward
+from rewards import calc_reward
 import agxcave.agxtasks.excavator.rock_capturing.config.rock_capturing_cfg as agxrewards
+import random
+
+
+def set_global_seed(seed: int):
+    # Python RNG
+    random.seed(seed)
+
+    # NumPy RNG
+    np.random.seed(seed)
+
+    # Python hash seed (wichtig für dict ordering etc.)
+    os.environ["PYTHONHASHSEED"] = str(seed)
 
 
 # normalize actions, action space of env is [-2, 2]
@@ -35,7 +47,7 @@ def load_demo_pickles(demo_dir):
     return demos
 
 
-def demos_to_dataset(demos):
+def demos_to_dataset(demos, reward=0):
     obs, actions, rewards, terminals, next_obs = [], [], [], [], []
 
     for traj in demos:
@@ -48,7 +60,7 @@ def demos_to_dataset(demos):
             ))
             actions.append(50*-traj[t]["action"][:3])
             
-            rew = calc_reward(traj[t], t == T-1)
+            rew = calc_reward(traj[t], t == T-1, reward=reward)
             rewards.append(rew)
 
             terminals.append(float(t == T - 1))
@@ -72,7 +84,7 @@ def demos_to_dataset(demos):
     return dataset
 
 
-def demos_to_pixel_dataset(demos, num_stack=3, img_size=64):
+def demos_to_pixel_dataset(demos, num_stack=3, img_size=64, reward=0):
     obs, actions, rewards, terminals, next_obs = [], [], [], [], []
 
     for traj in demos:
@@ -87,7 +99,15 @@ def demos_to_pixel_dataset(demos, num_stack=3, img_size=64):
             frame = cv2.resize(frame, (img_size, img_size), interpolation=cv2.INTER_AREA)
             frame_buffer.append(frame)
 
+            # fill at beginning to fullfill num_stacks
+            if len(frame_buffer) < num_stack:
+                while len(frame_buffer) < num_stack:
+                    frame_buffer.insert(0, frame)
+            else:
+                frame_buffer = frame_buffer[-num_stack:]  # letzten num_stack Frames behalten
 
+            # Stack entlang letzter Achse -> (H, W, 3, num_stack)
+            imgs = np.stack(frame_buffer, axis=-1)
 
             obs.append(
                 {
@@ -95,14 +115,10 @@ def demos_to_pixel_dataset(demos, num_stack=3, img_size=64):
                     "pixels": imgs.astype(np.uint8),
                 }
             )
-            actions.append(traj[t]["action"][:3])
+            
+            actions.append(50*-traj[t]["action"][:3])
 
-            rew = calc_reward(traj[t])
-            if t == T - 1:
-                z_stone = traj[t]["stone_pos"][2]
-                if z_stone >= 1.5:
-                    rew += 200.0
-
+            rew = calc_reward(traj[t], t == T-1, reward=reward)
             rewards.append(rew)
             terminals.append(float(t == T - 1))
 
@@ -141,7 +157,7 @@ def demos_to_pixel_dataset(demos, num_stack=3, img_size=64):
     return dataset
 
 
-def make_agx_env(headless=True, render_mode=None, device="cpu", reward=1, env_name="AgxCave-Rock-Capturing-Vision-v0"):
+def make_agx_env(headless=True, render_mode=None, device="cpu", reward=1, env_name="AgxCave-Rock-Capturing-Vision-v0", agx_args=[]):
 
     cfg = parse_env_cfg(
         env_name,
@@ -166,22 +182,22 @@ def make_agx_env(headless=True, render_mode=None, device="cpu", reward=1, env_na
     env = gymnasium.make(
         env_name,
         cfg=cfg,
-        agx_args=[],
+        agx_args=agx_args,
     )
 
     return env
 
 
-def make_agx_env_and_dataset(env_name, demo_dir, image_size=64, num_stack=3, pixel=False, reward=1):
+def make_agx_env_and_dataset(env_name, demo_dir, image_size=64, num_stack=3, pixel=False, reward=1, agx_args=[]):
 
-    env = make_agx_env(env_name=env_name, reward=reward)
+    env = make_agx_env(env_name=env_name, reward=reward, agx_args=agx_args)
 
     demos = load_demo_pickles(demo_dir)
     
     if pixel:
-        train_dataset = demos_to_pixel_dataset(demos, num_stack, image_size)
+        train_dataset = demos_to_pixel_dataset(demos, num_stack, image_size, reward=reward)
     else:
-        train_dataset = demos_to_dataset(demos)
+        train_dataset = demos_to_dataset(demos, reward=reward)
 
     return env, env, train_dataset, None
 

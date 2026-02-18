@@ -31,7 +31,7 @@ except:
     print("not importing binary dataset")
 from rlpd.evaluation import evaluate, evaluate_policy
 from rlpd.wrappers import wrap_gym
-from agx_utils import convert_obs, load_demo_pickles, demos_to_dataset, make_agx_env_and_dataset, sample_batch, normalize_actions
+from agx_utils import convert_obs, make_agx_env_and_dataset, sample_batch, normalize_actions, make_agx_env, set_global_seed
 from gym.spaces import Box
 
 
@@ -71,6 +71,38 @@ config_flags.DEFINE_config_file(
     lock_config=False,
 )
 
+flags.DEFINE_boolean("video", False, "record video")
+flags.DEFINE_string("video_dir", "./videos", "video dir")
+
+import random
+import numpy as np
+import os
+
+def build_agx_args(video: bool, video_dir: str, run_name: str):
+    agx_args = []
+
+    if video:
+        os.makedirs(video_dir, exist_ok=True)
+
+        video_path = os.path.join(video_dir, run_name)
+
+        agx_args.extend([
+            "--captureVideo", "1",
+            "--videoName", video_path,
+        ])
+
+    return agx_args
+
+def set_global_seed(seed: int):
+    # Python RNG
+    random.seed(seed)
+
+    # NumPy RNG
+    np.random.seed(seed)
+
+    # Python hash seed (wichtig für dict ordering etc.)
+    os.environ["PYTHONHASHSEED"] = str(seed)
+
 def combine(one_dict, other_dict):
     combined = {}
 
@@ -87,9 +119,9 @@ def combine(one_dict, other_dict):
 
     return combined
 
-
 def main(_):
     assert FLAGS.offline_ratio >= 0.0 and FLAGS.offline_ratio <= 1.0
+    set_global_seed(FLAGS.seed)
 
     wandb.init(project=FLAGS.project_name, name=FLAGS.name)
     wandb.config.update(FLAGS)
@@ -114,11 +146,12 @@ def main(_):
     # eval_env = gym.make(FLAGS.env_name)
     # eval_env = wrap_gym(eval_env, rescale_actions=True)
     # eval_env.seed(FLAGS.seed + 42)
-    env, eval_env, ds, _ = make_agx_env_and_dataset(FLAGS.env_name, FLAGS.demo_dir, reward=FLAGS.agxreward)
+    agx_args = build_agx_args(FLAGS.video, FLAGS.video_dir, str(0))
+    env, eval_env, ds, _ = make_agx_env_and_dataset(FLAGS.env_name, FLAGS.demo_dir, reward=FLAGS.agxreward, agx_args=agx_args)
     action_space_flat = Box(low=-2.0, high=2.0, shape=ds["actions"][0].shape, dtype=np.float32)
-    action_space_flat.seed(FLAGS.seed + 42)
+    action_space_flat.seed(FLAGS.seed)
     observation_space_flat = Box(low=-np.inf, high=np.inf, shape=ds["observations"][0].shape, dtype=np.float32)
-    observation_space_flat.seed(FLAGS.seed + 42)
+    observation_space_flat.seed(FLAGS.seed)
 
     kwargs = dict(FLAGS.config)
     model_cls = kwargs.pop("model_cls")
@@ -158,7 +191,7 @@ def main(_):
             for k, v in eval_info.items():
                 wandb.log({f"offline-evaluation/{k}": v}, step=i)
 
-    observation, _ = env.reset()
+    observation, _ = env.reset(seed=FLAGS.seed)
     done = False
     observation = convert_obs(observation)
     for i in tqdm.tqdm(
@@ -204,7 +237,7 @@ def main(_):
         observation = next_obs
 
         if done:
-            observation, _ = env.reset()
+            observation, _ = env.reset(seed=FLAGS.seed)
             done = False
             observation = convert_obs(observation)
             # for k, v in info["episode"].items():
@@ -238,7 +271,11 @@ def main(_):
             #     num_episodes=FLAGS.eval_episodes,
             #     save_video=FLAGS.save_video,
             # )
-            eval_info = evaluate_policy(agent, env, episodes=FLAGS.eval_episodes, pixel=False)
+            # env.close()
+            # agx_args = build_agx_args(video=FLAGS.video, video_dir=FLAGS.video_dir, run_name=str(i))
+            # env = make_agx_env(env_name=FLAGS.env_name, reward=FLAGS.agxreward, agx_args=agx_args, headless=False, render_mode="human")
+            # env.reset(seed=FLAGS.seed)
+            eval_info = evaluate_policy(agent, env, episodes=FLAGS.eval_episodes, pixel=False, seed=FLAGS.seed)
 
             for k, v in eval_info.items():
                 wandb.log({f"evaluation/{k}": v}, step=i + FLAGS.pretrain_steps)
