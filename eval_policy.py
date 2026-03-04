@@ -73,14 +73,18 @@ def run_policy(save_dir, episodes=5, jax=False, step=150000, pixel=False, action
     # Dummy observation_space/action_space (nur für Agent.create)
     obs_sample, _ = env.reset(seed=seed)
     if pixel:
+        scaling=(2,2,4)
         obs_sample = convert_obs_pixel(obs_sample)
-    else:
-        obs_sample = convert_obs(obs_sample)
-
-    if pixel:
         action_space_flat = Box(low=-2.0, high=2.0, shape=(3,), dtype=np.float32)
         
         config = get_config_pixels()
+        config.latent_dim_pixels = 32
+        config.latent_dim_state = 8
+        config.hidden_dims=(512, 512)
+        config.num_min_qs=2
+        config.num_qs=2
+        config.backup_entropy=False
+
         kwargs = dict(config)
         model_cls = kwargs.pop("model_cls")
         agent = globals()[model_cls].create(
@@ -91,15 +95,17 @@ def run_policy(save_dir, episodes=5, jax=False, step=150000, pixel=False, action
         )
 
     else:
+        scaling=(2,2,4)
+        obs_sample = convert_obs(obs_sample)
         observation_space_flat = Box(low=-np.inf, high=np.inf, shape=obs_sample.shape, dtype=np.float32)
         action_space_flat = Box(low=-2.0, high=2.0, shape=(3,), dtype=np.float32)
 
         config = get_config()
         config.hidden_dims=(512, 512)
-        # config.num_min_qs=4
         config.num_min_qs=2
         config.num_qs=2
         config.backup_entropy=False
+
 
         kwargs = dict(config)
         model_cls = kwargs.pop("model_cls")
@@ -112,7 +118,7 @@ def run_policy(save_dir, episodes=5, jax=False, step=150000, pixel=False, action
 
     agent = load_checkpoint(agent, save_dir, jax=jax, step=step)
 
-    log_evaluation(agent, env, episodes, pixel, True, seed=seed)
+    log_evaluation(agent, env, episodes, pixel, True, seed=seed, scaling=scaling)
 
     # Old Code
     # 4️⃣ Policy ausführen
@@ -250,7 +256,7 @@ def main():
         num_stack=args.num_stack,
         image_size=args.image_size,
         reward=args.reward,
-        seed=args.seed
+        seed=args.seed,
     )
 
 

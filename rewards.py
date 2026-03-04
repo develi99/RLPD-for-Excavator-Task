@@ -39,11 +39,11 @@ def calc_reward1(obs, last):
     bucket_pos_tensor = torch.tensor(bucket_pos)
     stone_pos_tensor = torch.tensor(stone_pos)
     dist_proximity = torch.norm(bucket_pos_tensor - stone_pos_tensor)
-    # Reward: je kleiner der Abstand, desto größer der Reward
+    # Reward: the smaller the distance the higher the reward
     epsilon = 1e-6
     proximity_reward = 1.0 / (dist_proximity + epsilon)
 
-    # Kombiniere die Rewards
+    # combine rewards
     reward += float(proximity_reward) / 60.0
 
     return reward
@@ -109,4 +109,3 @@ def calc_reward5(obs, last):
         reward += 50.0
 
     return reward
-

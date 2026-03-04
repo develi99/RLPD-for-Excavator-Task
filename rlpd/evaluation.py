@@ -45,9 +45,9 @@ def get_rewards(info, show=False):
     return rewards
 
 
-def log_evaluation(agent, env, episodes=25, pixel=False, show_reward=True, seed=0):
+def log_evaluation(agent, env, episodes=25, pixel=False, show_reward=True, seed=0, scaling=(2,2,2)):
 
-    results = evaluate_policy(agent, env, episodes, pixel, show_reward, seed=seed)
+    results = evaluate_policy(agent, env, episodes, pixel, show_reward, seed=seed, scaling=scaling)
 
     print("\n" + "="*50)
     print("EVALUATION RESULTS")
@@ -80,7 +80,7 @@ def log_evaluation(agent, env, episodes=25, pixel=False, show_reward=True, seed=
     return results
 
 
-def evaluate_policy(agent, env, episodes=25, pixel=False, show_rewards=False, seed=0):
+def evaluate_policy(agent, env, episodes=25, pixel=False, show_rewards=False, seed=0, scaling=(2,2,2)):
     reward_storage = defaultdict(list)
     returns = []
     successes = []
@@ -104,7 +104,8 @@ def evaluate_policy(agent, env, episodes=25, pixel=False, show_rewards=False, se
         while not done:
             action = agent.eval_actions(obs)
             next_obs, reward, terminated, truncated, info = env.step(
-                [action[0]*2, action[1]*2, action[2]*2, 0, 0]
+                [action[0]*scaling[0], action[1]*scaling[1], action[2]*scaling[2], 0, 0]
+                # [action[0]*2, action[1]*2, action[2]*4, 0, 0]
             )
 
             stone_pos = next_obs["stone"]

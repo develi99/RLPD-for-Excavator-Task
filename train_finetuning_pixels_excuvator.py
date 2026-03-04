@@ -10,6 +10,7 @@ from flax.core import FrozenDict
 from ml_collections import config_flags
 from flax.core import unfreeze
 from rlpd.data.replay_buffer_sample import ReplayBufferSample
+from rlpd.data.memory_efficient_replay_buffer_sample import MemoryEfficientReplayBufferSample
 
 try:
     from flax.training import checkpoints
@@ -19,7 +20,8 @@ except:
 import pickle
 import wandb
 from rlpd.agents import DrQLearner
-from rlpd.data import MemoryEfficientReplayBuffer
+from rlpd.agents import DrMAgent
+
 from rlpd.data.vd4rl_datasets import VD4RLDataset
 from rlpd.evaluation import evaluate_policy
 from rlpd.wrappers import WANDBVideo, wrap_pixels
@@ -159,6 +161,7 @@ def main(_):
         )
 
     env, _, ds, _ = make_agx_env_and_dataset(FLAGS.env_name, FLAGS.demo_dir, image_size=FLAGS.image_size, num_stack=3, pixel=True, reward=FLAGS.agxreward)
+    print("here")
     if action_repeat > 1:
         env = RepeatAction(env, action_repeat)
     if FLAGS.num_stack is not None:
@@ -193,17 +196,17 @@ def main(_):
 
     replay_buffer_size = FLAGS.replay_buffer_size or FLAGS.max_steps // action_repeat
     if FLAGS.memory_efficient_replay_buffer:
-        replay_buffer = MemoryEfficientReplayBuffer(
-            env.observation_space, env.action_space, replay_buffer_size
+        replay_buffer = MemoryEfficientReplayBufferSample(
+            ds["observations"][0], ds["actions"][0], replay_buffer_size
         )
-        replay_buffer_iterator = replay_buffer.get_iterator(
-            sample_args={
-                "batch_size": int(
-                    FLAGS.batch_size * FLAGS.utd_ratio * (1 - FLAGS.offline_ratio)
-                ),
-                "pack_obs_and_next_obs": True,
-            }
-        )
+        # replay_buffer_iterator = replay_buffer.get_iterator(
+        #     sample_args={
+        #         "batch_size": int(
+        #             FLAGS.batch_size * FLAGS.utd_ratio * (1 - FLAGS.offline_ratio)
+        #         ),
+        #         "pack_obs_and_next_obs": True,
+        #     }
+        # )
     else:
         replay_buffer = ReplayBufferSample(
             observation_sample=ds["observations"][0], action_sample=ds["actions"][0], capacity=replay_buffer_size
@@ -222,13 +225,17 @@ def main(_):
     kwargs = dict(FLAGS.config)
     model_cls = kwargs.pop("model_cls")
     print(model_cls)
-    agent = globals()[model_cls].create(
-        seed=FLAGS.seed,
-        observations=ds["observations"][0],
-        actions=ds["actions"][0],
-        pixel_keys=("pixels",),
-        **kwargs,
-    )
+    if model_cls == "DrMAgent":
+        agent = DrMAgent(**kwargs)
+
+    else:
+        agent = globals()[model_cls].create(
+            seed=FLAGS.seed,
+            observations=ds["observations"][0],
+            actions=ds["actions"][0],
+            pixel_keys=("pixels",),
+            **kwargs,
+        )
 
     observation, _ = env.reset(seed=FLAGS.seed)
     done = False

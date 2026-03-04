@@ -9,7 +9,7 @@ import cv2
 from rewards import calc_reward
 import agxcave.agxtasks.excavator.rock_capturing.config.rock_capturing_cfg as agxrewards
 import random
-
+import torch
 
 def set_global_seed(seed: int):
     # Python RNG
@@ -18,8 +18,12 @@ def set_global_seed(seed: int):
     # NumPy RNG
     np.random.seed(seed)
 
-    # Python hash seed (wichtig für dict ordering etc.)
+    # Python hash seed
     os.environ["PYTHONHASHSEED"] = str(seed)
+
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
 # normalize actions, action space of env is [-2, 2]
 def normalize_actions(a, low=-2.0, high=2.0):
