@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import sys
 
 sys.path.append("..")
-import utils
+import utils_drm
 
 
 class RandomShiftsAug(nn.Module):
@@ -55,7 +55,7 @@ class Encoder(nn.Module):
                                      nn.ReLU(), nn.Conv2d(32, 32, 3, stride=1),
                                      nn.ReLU())
 
-        self.apply(utils.weight_init)
+        self.apply(utils_drm.weight_init)
 
     def forward(self, obs):
         obs = obs / 255.0 - 0.5
@@ -77,7 +77,7 @@ class Actor(nn.Module):
                                     nn.ReLU(inplace=True),
                                     nn.Linear(hidden_dim, action_shape[0]))
 
-        self.apply(utils.weight_init)
+        self.apply(utils_drm.weight_init)
 
     def forward(self, obs, std):
         h = self.trunk(obs)
@@ -86,7 +86,7 @@ class Actor(nn.Module):
         mu = torch.tanh(mu)
         std = torch.ones_like(mu) * std
 
-        dist = utils.TruncatedNormal(mu, std)
+        dist = utils_drm.TruncatedNormal(mu, std)
         return dist
 
 
@@ -107,7 +107,7 @@ class Critic(nn.Module):
             nn.ReLU(inplace=True), nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(inplace=True), nn.Linear(hidden_dim, 1))
 
-        self.apply(utils.weight_init)
+        self.apply(utils_drm.weight_init)
 
     def forward(self, obs, action):
         h = self.trunk(obs)
@@ -130,7 +130,7 @@ class VNetwork(nn.Module):
                                nn.Linear(hidden_dim, hidden_dim),
                                nn.ReLU(inplace=True), nn.Linear(hidden_dim, 1))
 
-        self.apply(utils.weight_init)
+        self.apply(utils_drm.weight_init)
 
     def forward(self, obs):
         h = self.trunk(obs)
@@ -202,7 +202,7 @@ class DrMAgent:
 
     def stddev(self, step):
         if self.stddev_type == "max":
-            return max(utils.schedule(self.stddev_schedule, step), self.stddev)
+            return max(utils_drm.schedule(self.stddev_schedule, step), self.stddev)
         elif self.stddev_type == "dormant":
             return self.dormant_stddev
         elif self.stddev_type == "awake":
@@ -211,7 +211,7 @@ class DrMAgent:
             else:
                 return max(
                     self.dormant_stddev,
-                    utils.schedule(self.stddev_schedule,
+                    utils_drm.schedule(self.stddev_schedule,
                                    step - self.awaken_step))
         else:
             raise NotImplementedError(self.stddev_type)
@@ -319,13 +319,13 @@ class DrMAgent:
         return metrics
 
     def perturb(self, step):
-        utils.perturb(self.actor, self.actor_opt, self.perturb_factor(step))
-        utils.perturb(self.critic, self.critic_opt, self.perturb_factor(step))
-        utils.perturb(self.critic_target, self.critic_opt,
+        utils_drm.perturb(self.actor, self.actor_opt, self.perturb_factor(step))
+        utils_drm.perturb(self.critic, self.critic_opt, self.perturb_factor(step))
+        utils_drm.perturb(self.critic_target, self.critic_opt,
                       self.perturb_factor(step))
-        utils.perturb(self.encoder, self.encoder_opt,
+        utils_drm.perturb(self.encoder, self.encoder_opt,
                       self.perturb_factor(step))
-        utils.perturb(self.value_predictor, self.predictor_opt,
+        utils_drm.perturb(self.value_predictor, self.predictor_opt,
                       self.perturb_factor(step))
 
     def update(self, replay_iter, step):
@@ -335,7 +335,7 @@ class DrMAgent:
             self.perturb(step)
 
         batch = next(replay_iter)
-        obs, action, reward, discount, next_obs = utils.to_torch(
+        obs, action, reward, discount, next_obs = utils_drm.to_torch(
             batch, self.device)
 
         # augment
@@ -347,7 +347,7 @@ class DrMAgent:
             next_obs = self.encoder(next_obs)
 
         # calculate dormant ratio
-        self.dormant_ratio = utils.cal_dormant_ratio(
+        self.dormant_ratio = utils_drm.cal_dormant_ratio(
             self.actor, obs.detach(), 0, percentage=self.dormant_threshold)
 
         if self.awaken_step is None and step > self.num_expl_steps and self.dormant_ratio < self.target_dormant_ratio:
@@ -368,7 +368,7 @@ class DrMAgent:
         metrics.update(self.update_actor(obs.detach(), step))
 
         # update critic target
-        utils.soft_update_params(self.critic, self.critic_target,
+        utils_drm.soft_update_params(self.critic, self.critic_target,
                                  self.critic_target_tau)
 
         return metrics
