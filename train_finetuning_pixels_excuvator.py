@@ -160,8 +160,7 @@ def main(_):
             camera_id=camera_id,
         )
 
-    env, _, ds, _ = make_agx_env_and_dataset(FLAGS.env_name, FLAGS.demo_dir, image_size=FLAGS.image_size, num_stack=3, pixel=True, reward=FLAGS.agxreward)
-    print("here")
+    env, _, ds, _ = make_agx_env_and_dataset(FLAGS.env_name, FLAGS.demo_dir, image_size=FLAGS.image_size, num_stack=FLAGS.num_stack, pixel=True, reward=FLAGS.agxreward)
     if action_repeat > 1:
         env = RepeatAction(env, action_repeat)
     if FLAGS.num_stack is not None:
