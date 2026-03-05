@@ -4,7 +4,8 @@ import numpy as np
 
 class RepeatAction(gym.Wrapper):
     def __init__(self, env, action_repeat=4):
-        super().__init__(env)
+        # super().__init__(env)
+        self.env = env
         self._action_repeat = action_repeat
 
     def step(self, action: np.ndarray):

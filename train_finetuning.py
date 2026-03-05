@@ -278,7 +278,7 @@ def main(_):
             eval_info = evaluate_policy(agent, env, episodes=FLAGS.eval_episodes, pixel=False, seed=FLAGS.seed)
 
             for k, v in eval_info.items():
-                wandb.log({f"evaluation/{k}": v}, step=i + FLAGS.pretrain_steps)
+                wandb.log({f"eval/{k}": v}, step=i + FLAGS.pretrain_steps)
 
             if FLAGS.checkpoint_model:
                 try:

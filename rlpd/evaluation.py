@@ -45,6 +45,11 @@ def get_rewards(info, show=False):
     return rewards
 
 
+from collections import defaultdict
+import numpy as np
+from tqdm import trange
+
+
 def log_evaluation(agent, env, episodes=25, pixel=False, show_reward=True, seed=0, scaling=(2,2,2)):
 
     results = evaluate_policy(agent, env, episodes, pixel, show_reward, seed=seed, scaling=scaling)
@@ -53,27 +58,30 @@ def log_evaluation(agent, env, episodes=25, pixel=False, show_reward=True, seed=
     print("EVALUATION RESULTS")
     print("="*50)
 
-    # Hauptmetriken (bekannte Keys)
     main_keys = [
-        "mean_return",
+        "episode_reward",
+        "episode_length",
         "success_ratio",
-        "over_boundary_ratio",
+        "rock_lifted_ratio",
         "fall_down_ratio",
         "mean_end_position",
     ]
 
     print("\nCore Metrics:")
     for key in main_keys:
-        if key in results:
-            print(f"  {key:<25} : {results[key]:>10.6f}")
+        print(f"  {key:<30} : {results[key]:>10.6f}")
 
-    # Reward-Komponenten (alles andere)
-    reward_keys = [k for k in results.keys() if k not in main_keys]
+    term_keys = [k for k in results.keys() if k.startswith("term/")]
 
-    if reward_keys:
-        print("\nReward Breakdown:")
-        for key in sorted(reward_keys):
-            print(f"  {key:<25} : {results[key]:>10.6f}")
+    print("\nTermination Breakdown:")
+    for key in sorted(term_keys):
+        print(f"  {key:<30} : {results[key]:>10.6f}")
+
+    reward_keys = [k for k in results.keys() if k.startswith("reward/")]
+
+    print("\nReward Breakdown:")
+    for key in sorted(reward_keys):
+        print(f"  {key:<30} : {results[key]:>10.6f}")
 
     print("="*50 + "\n")
 
@@ -81,108 +89,295 @@ def log_evaluation(agent, env, episodes=25, pixel=False, show_reward=True, seed=
 
 
 def evaluate_policy(agent, env, episodes=25, pixel=False, show_rewards=False, seed=0, scaling=(2,2,2)):
-    reward_storage = defaultdict(list)
+
+    # fixed termination keys (same as original eval)
+    termination_keys = {
+        "max_steps": 0,
+        "too_deep_termination": 0,
+        "stone_x_distance_termination": 0,
+        "stone_height_termination": 0,
+        "cabin_pitch_termination": 0,
+    }
+
+    # fixed reward keys (same as original eval)
+    reward_keys = {
+        "rock_stable": [],
+        "rock_z_pos": [],
+        "rock_1_5": [],
+        "rock_bucket_dis": [],
+        "rock_z_pos_clipped": [],
+        "energy_reg": [],
+    }
+
     returns = []
     successes = []
-    over_boundarys = []
-    falled_down = []
+    rock_lifted = []
+    fall_downs = []
     end_positions = []
+    episode_lengths = []
 
     for _ in trange(episodes, desc="Episodes"):
-        obs, _ = env.reset(seed=seed)
+
+        obs, info = env.reset(seed=seed)
+
         if pixel:
             obs = convert_obs_pixel(obs)
         else:
             obs = convert_obs(obs)
+
         done = False
         ep_return = 0.0
-        success = False
-        over_boundary = False
-        fall_down = False
+        episode_step = 0
+
+        episode_success = False
+        episode_rock_lifted = False
+        episode_fall_down = False
         end_position = 0.0
 
         while not done:
+
             action = agent.eval_actions(obs)
+
             next_obs, reward, terminated, truncated, info = env.step(
                 [action[0]*scaling[0], action[1]*scaling[1], action[2]*scaling[2], 0, 0]
-                # [action[0]*2, action[1]*2, action[2]*4, 0, 0]
             )
+
+            done = terminated or truncated
+            episode_step += 1
 
             stone_pos = next_obs["stone"]
             z = stone_pos[0][2]
             end_position = z
 
             if z >= 1.5:
-                over_boundary = True
+                episode_rock_lifted = True
 
-            if over_boundary and z <= 1.0:
-                fall_down = True
+            if episode_rock_lifted and z <= 1.0:
+                episode_fall_down = True
 
-            rock_stable = info.get('extras', None)["Step_Reward/rock_stable"]
+            rock_stable = info.get("extras", {}).get("Step_Reward/rock_stable", 0)
             if rock_stable != 0:
-                success = True
+                episode_success = True
 
-            # Read rewards
+            # reward logging
+            log_info = info.get("extras", {}).get("log", {})
+            step_rewards = info.get("extras", {})
 
-            # all rewards, too much bullshit is logged
-            # extras = info.get("extras", {})
-            # for key, value in extras.items():
-            #     if key.startswith("Step_Reward/"):
-            #         clean_key = key.replace("Step_Reward/", "")
-            #         reward_storage[clean_key].append(value)
+            for key in reward_keys.keys():
+                step_key = f"Step_Reward/{key}"
+                if step_key in step_rewards:
+                    reward_keys[key].append(step_rewards[step_key])
 
-            # specific rewards
-            rewards = get_rewards(info, show_rewards)
+            # termination logging
+            if done:
+                for key in termination_keys.keys():
+                    term_key = f"Episode_Termination/{key}"
+                    if log_info.get(term_key, 0) == 1:
+                        termination_keys[key] += 1
 
-            if rewards is not None:
-                for key, value in rewards.items():
-                    if value is not None:
-                        reward_storage[key].append(value)
-
-            
-            done = terminated or truncated
             ep_return += reward
 
             if pixel:
                 next_obs = convert_obs_pixel(next_obs)
             else:
                 next_obs = convert_obs(next_obs)
-            
+
             obs = next_obs
 
         returns.append(ep_return)
-        successes.append(success)
-        over_boundarys.append(over_boundary)
-        falled_down.append(fall_down)
+        successes.append(episode_success)
+        rock_lifted.append(episode_rock_lifted)
+        fall_downs.append(episode_fall_down)
         end_positions.append(end_position)
+        episode_lengths.append(episode_step)
 
-
-    mean_return = np.mean(returns)
-
-    success_ratio = np.mean(successes)
-    over_boundary_ratio = np.mean(over_boundarys)
-    fall_down_ratio = np.mean(falled_down)
-    mean_end_position = np.mean(end_positions)
-
-    # return {
-    #     "mean_return": mean_return,
-    #     "success_ratio": success_ratio,
-    #     "over_boundary_ratio": over_boundary_ratio,
-    #     "fall_down_ratio": fall_down_ratio,
-    #     "mean_end_position": mean_end_position
-    # }
-
-    mean_rewards = {
-        key: float(np.mean(values))
-        for key, values in reward_storage.items()
-        if len(values) > 0
+    results = {
+        "episode_reward": float(np.mean(returns)),
+        "episode_length": float(np.mean(episode_lengths)),
+        "success_ratio": float(np.mean(successes)),
+        "rock_lifted_ratio": float(np.mean(rock_lifted)),
+        "fall_down_ratio": float(np.mean(fall_downs)),
+        "mean_end_position": float(np.mean(end_positions)),
     }
 
-    return {
-        "mean_return": mean_return,
-        "success_ratio": success_ratio,
-        "over_boundary_ratio": over_boundary_ratio,
-        "fall_down_ratio": fall_down_ratio,
-        "mean_end_position": mean_end_position,
-        **mean_rewards,
-    }
+    # add termination stats (always present)
+    for key, count in termination_keys.items():
+        results[f"term/{key}"] = count / episodes
+
+    # add reward stats (always present)
+    for key, values in reward_keys.items():
+        if len(values) > 0:
+            results[f"reward/{key}"] = float(np.mean(values))
+        else:
+            results[f"reward/{key}"] = 0.0
+
+    return results
+
+
+    
+
+# from collections import defaultdict
+# import numpy as np
+# from tqdm import trange
+
+
+# def log_evaluation(agent, env, episodes=25, pixel=False, show_reward=True, seed=0, scaling=(2,2,2)):
+
+#     results = evaluate_policy(agent, env, episodes, pixel, show_reward, seed=seed, scaling=scaling)
+
+#     print("\n" + "="*50)
+#     print("EVALUATION RESULTS")
+#     print("="*50)
+
+#     # Core metrics
+#     main_keys = [
+#         "episode_reward",
+#         "episode_length",
+#         "success_ratio",
+#         "rock_lifted_ratio",
+#         "fall_down_ratio",
+#         "mean_end_position",
+#     ]
+
+#     print("\nCore Metrics:")
+#     for key in main_keys:
+#         if key in results:
+#             print(f"  {key:<30} : {results[key]:>10.6f}")
+
+#     # Termination metrics
+#     term_keys = [k for k in results.keys() if k.startswith("term/")]
+
+#     if term_keys:
+#         print("\nTermination Breakdown:")
+#         for key in sorted(term_keys):
+#             print(f"  {key:<30} : {results[key]:>10.6f}")
+
+#     # Reward metrics
+#     reward_keys = [k for k in results.keys() if k.startswith("reward/")]
+
+#     if reward_keys:
+#         print("\nReward Breakdown:")
+#         for key in sorted(reward_keys):
+#             print(f"  {key:<30} : {results[key]:>10.6f}")
+
+#     print("="*50 + "\n")
+
+#     return results
+
+
+# def evaluate_policy(agent, env, episodes=25, pixel=False, show_rewards=False, seed=0, scaling=(2,2,2)):
+#     reward_storage = defaultdict(list)
+
+#     returns = []
+#     successes = []
+#     rock_lifted = []
+#     fall_downs = []
+#     end_positions = []
+#     episode_lengths = []
+
+#     terminations_info = defaultdict(int)
+
+#     for _ in trange(episodes, desc="Episodes"):
+#         obs, info = env.reset(seed=seed)
+
+#         if pixel:
+#             obs = convert_obs_pixel(obs)
+#         else:
+#             obs = convert_obs(obs)
+
+#         done = False
+#         ep_return = 0.0
+#         episode_step = 0
+
+#         episode_success = False
+#         episode_rock_lifted = False
+#         episode_fall_down = False
+#         end_position = 0.0
+
+#         while not done:
+#             action = agent.eval_actions(obs)
+
+#             next_obs, reward, terminated, truncated, info = env.step(
+#                 [action[0]*scaling[0], action[1]*scaling[1], action[2]*scaling[2], 0, 0]
+#             )
+
+#             done = terminated or truncated
+#             episode_step += 1
+
+#             stone_pos = next_obs["stone"]
+#             z = stone_pos[0][2]
+#             end_position = z
+
+#             # rock lifted
+#             if z >= 1.5:
+#                 episode_rock_lifted = True
+
+#             # fall down
+#             if episode_rock_lifted and z <= 1.0:
+#                 episode_fall_down = True
+
+#             # success
+#             rock_stable = info.get("extras", {}).get("Step_Reward/rock_stable", 0)
+#             if rock_stable != 0:
+#                 episode_success = True
+
+#             # reward logging
+#             rewards = get_rewards(info, show_rewards)
+#             if rewards is not None:
+#                 for key, value in rewards.items():
+#                     if value is not None:
+#                         reward_storage[key].append(value)
+
+#             # termination logging
+#             log_info = info.get("extras", {}).get("log", {})
+
+#             if done:
+#                 for key, value in log_info.items():
+#                     if key.startswith("Episode_Termination/") and value == 1:
+#                         terminations_info[key.replace("Episode_Termination/", "")] += 1
+
+#             ep_return += reward
+
+#             if pixel:
+#                 next_obs = convert_obs_pixel(next_obs)
+#             else:
+#                 next_obs = convert_obs(next_obs)
+
+#             obs = next_obs
+
+#         returns.append(ep_return)
+#         successes.append(episode_success)
+#         rock_lifted.append(episode_rock_lifted)
+#         fall_downs.append(episode_fall_down)
+#         end_positions.append(end_position)
+#         episode_lengths.append(episode_step)
+#         print(episode_step)
+
+#     mean_return = float(np.mean(returns))
+#     mean_length = float(np.mean(episode_lengths))
+#     success_ratio = float(np.mean(successes))
+#     rock_lifted_ratio = float(np.mean(rock_lifted))
+#     fall_down_ratio = float(np.mean(fall_downs))
+#     mean_end_position = float(np.mean(end_positions))
+
+#     mean_rewards = {
+#         key: float(np.mean(values))
+#         for key, values in reward_storage.items()
+#         if len(values) > 0
+#     }
+
+#     terminations = {
+#         f"term/{key}": value / episodes
+#         for key, value in terminations_info.items()
+#     }
+
+#     return {
+#         "episode_reward": mean_return,
+#         "episode_length": mean_length,
+#         "success_ratio": success_ratio,
+#         "rock_lifted_ratio": rock_lifted_ratio,
+#         "fall_down_ratio": fall_down_ratio,
+#         "mean_end_position": mean_end_position,
+#         **terminations,
+#         **{f"reward/{k}": v for k, v in mean_rewards.items()},
+#     }

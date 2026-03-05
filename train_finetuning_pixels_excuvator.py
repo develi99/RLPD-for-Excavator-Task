@@ -298,12 +298,6 @@ def main(_):
                     wandb.log({f"training/{k}": v}, step=i * action_repeat)
 
         if i % FLAGS.eval_interval == 0:
-            # eval_info = evaluate(
-            #     agent,
-            #     eval_env,
-            #     num_episodes=FLAGS.eval_episodes,
-            #     save_video=FLAGS.save_video,
-            # )
             eval_info = evaluate_policy(agent, env, episodes=FLAGS.eval_episodes, pixel=True)
 
             for k, v in eval_info.items():

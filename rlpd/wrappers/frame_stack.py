@@ -50,39 +50,39 @@ import cv2
 
 class FrameStack(gym.Wrapper):
     def __init__(self, env, num_stack: int, img_size=64):
-        super().__init__(env)
-
+        # super().__init__(env)
+        self.env = env
         self.num_stack = num_stack
         self.img_size = img_size
         self.frames = collections.deque(maxlen=num_stack)
 
-        obs_space = env.observation_space
-        assert "camera" in obs_space.spaces
-        assert "rgb" in obs_space.spaces["camera"].spaces
+        # obs_space = env.observation_space
+        # assert "camera" in obs_space.spaces
+        # assert "rgb" in obs_space.spaces["camera"].spaces
 
-        rgb_space = obs_space.spaces["camera"].spaces["rgb"]
+        # rgb_space = obs_space.spaces["camera"].spaces["rgb"]
 
-        # rgb_space shape: (3, H, W) oder (H, W, 3)
-        if rgb_space.shape[0] == 3:
-            c, h, w = rgb_space.shape
-            new_shape = (3, img_size, img_size, num_stack)
-        else:
-            h, w, c = rgb_space.shape
-            new_shape = (img_size, img_size, c, num_stack)
+        # # rgb_space shape: (3, H, W) oder (H, W, 3)
+        # if rgb_space.shape[0] == 3:
+        #     c, h, w = rgb_space.shape
+        #     new_shape = (3, img_size, img_size, num_stack)
+        # else:
+        #     h, w, c = rgb_space.shape
+        #     new_shape = (img_size, img_size, c, num_stack)
 
-        low = np.repeat(rgb_space.low[..., None], num_stack, axis=-1)
-        high = np.repeat(rgb_space.high[..., None], num_stack, axis=-1)
+        # low = np.repeat(rgb_space.low[..., None], num_stack, axis=-1)
+        # high = np.repeat(rgb_space.high[..., None], num_stack, axis=-1)
 
         # Observation space korrekt anpassen
-        new_obs_space = obs_space
-        new_obs_space.spaces["camera"].spaces["rgb"] = Box(
-            low=low.min(),
-            high=high.max(),
-            shape=new_shape,
-            dtype=rgb_space.dtype,
-        )
+        # new_obs_space = obs_space
+        # new_obs_space.spaces["camera"].spaces["rgb"] = Box(
+        #     low=low.min(),
+        #     high=high.max(),
+        #     shape=new_shape,
+        #     dtype=rgb_space.dtype,
+        # )
 
-        self.observation_space = new_obs_space
+        # self.observation_space = new_obs_space
 
     def _process_frame(self, frame):
         frame = np.asarray(frame)
@@ -106,11 +106,6 @@ class FrameStack(gym.Wrapper):
         obs["policy"] = np.asarray(obs["policy"])
         return obs, _
     
-    # @property
-    # def frames(self):
-    #     # (3, img_size, img_size, num_stack)
-    #     return np.stack(self._frames, axis=-1)
-
     def step(self, action):
         obs, reward, terminated, truncated, info = self.env.step(action)
 

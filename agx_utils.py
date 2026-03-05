@@ -192,8 +192,10 @@ def make_agx_env(headless=True, render_mode=None, device="cpu", reward=1, env_na
 
 
 def make_agx_env_and_dataset(env_name, demo_dir, image_size=64, num_stack=3, pixel=False, reward=1, agx_args=[]):
-
-    env = make_agx_env(env_name=env_name, reward=reward, agx_args=agx_args)
+    if pixel:
+        env = make_agx_env(render_mode="rgb_array", reward=reward, env_name=env_name, agx_args=agx_args)
+    else:
+        env = make_agx_env(env_name=env_name, reward=reward, agx_args=agx_args)
 
     demos = load_demo_pickles(demo_dir)
     
@@ -220,7 +222,7 @@ def convert_obs_pixel(obs):
     """
     state = obs["policy"].flatten()[:3]
     pixel = obs["camera"]["rgb"]  # Shape: (H, W, 3, 3)
-    pixel = pixel.astype(np.uint8)
+    pixel = (pixel * 255).clip(0, 255).astype(np.uint8)
 
     return {
         "state": state.astype(np.float32),

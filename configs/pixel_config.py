@@ -4,17 +4,29 @@ import ml_collections
 def get_config():
     config = ml_collections.ConfigDict()
 
-    config.hidden_dims = (256, 256)
+    config.hidden_dims = (512, 512)
 
-    # Latent-Dimensionen
+    # Latent-Dimensions
     config.latent_dim_pixels = 64
     config.latent_dim_state = 16
 
-    # CNN für Pixel-Eingaben 128x128x9 (3 gestapelte Bilder)
-    config.cnn_features = (16, 32, 64, 16)# (32, 64, 128, 256)
-    config.cnn_filters = (3, 3, 3, 1)
-    config.cnn_strides = (2, 2, 2, 1)
+    # for 128x128 -> 16x16 Stein (5x5) less than 1 pixel for the stone at outputmap
+    # config.cnn_features = (16, 32, 64, 16)# (32, 64, 128, 256)
+    # config.cnn_filters = (3, 3, 3, 1)
+    # config.cnn_strides = (2, 2, 2, 1)
+
+    # this would have one pixel for input 100x100 and only 10 K Features output, which is feasible
+    config.cnn_features = (16, 32, 16)
+    config.cnn_filters = (3, 3, 1) # efficient 1x1 filter! Decrease amount of features for efficiency
+    config.cnn_strides = (2, 2, 1)
     config.cnn_padding = "SAME"
+
+    # for 256x256 -> 16x16 Stein (5x5) less than 1 pixel for the stone at outputmap
+    # try same as above for fine grained feature map
+    # config.cnn_features = (16, 32, 64, 128, 32)# (32, 64, 128, 256)
+    # config.cnn_filters = (3, 3, 3, 3, 1)
+    # config.cnn_strides = (2, 2, 2, 2, 1)
+    # config.cnn_padding = "SAME"
 
     # Encoder-Typ
     config.encoder = "d4pg"
