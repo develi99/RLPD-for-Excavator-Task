@@ -13,11 +13,10 @@ Task: Excavator picks up a stone and lifts it stably
 - Physics engine: **AGX Dynamics**
 - Randomized every episode:
   - Stone position (x, y)
-  - Stone rotation around z-axis
   - Initial joint angles (boom, arm, bucket)
 - Observation spaces:
-  - **State-based**: stone (x, y, θ_z) + joint angles (boom, arm, bucket) → 6 dimensions
-  - **Vision-based**: RGB image (camera view from cabin) + joint angles (6 dimensions)
+  - **State-based**: stone (x, y, z) + joint angles (boom, arm, bucket) → 6 dimensions
+  - **Vision-based**: RGB image (camera view from cabin) + joint angles (3 dimensions)
 - Actions: joint velocities (Δ boom, Δ arm, Δ bucket) → 3 continuous dimensions
 
 ## Reward Functions – Comparison
