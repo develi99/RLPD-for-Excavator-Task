@@ -4,7 +4,7 @@ Simulation-based reinforcement learning using **AGX Dynamics**
 Task: Excavator picks up a stone and lifts it stably
 
 <p align="center">
-  <img src="output_3x_klein.gif" alt="Excavator picking up stone – triple view" width="720"/>
+  <img src="/README/output_3x_klein.gif" alt="Excavator picking up stone – triple view" width="720"/>
   <br><em>Short demo (~15 seconds): Trained policy picking up a stone (triple view)</em>
 </p>
 
