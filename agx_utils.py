@@ -61,8 +61,9 @@ def demos_to_dataset(demos, reward=0):
                 [traj[t]["state"][:3], traj[t]["stone_pos"]],
                 axis=-1
             ))
-            actions.append(50*-traj[t]["action"][:3])
-            
+            action = normalize_actions(50*-traj[t]["action"][:3])
+            actions.append(action)
+
             rew = calc_reward(traj[t], t == T-1, reward=reward)
             rewards.append(rew)
 
@@ -119,7 +120,8 @@ def demos_to_pixel_dataset(demos, num_stack=3, img_size=64, reward=0):
                 }
             )
             
-            actions.append(50*-traj[t]["action"][:3])
+            action = normalize_actions(50*-traj[t]["action"][:3])
+            actions.append(action)
 
             rew = calc_reward(traj[t], t == T-1, reward=reward)
             rewards.append(rew)

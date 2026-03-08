@@ -67,13 +67,13 @@ def run_policy(save_dir, episodes=5, jax=False, step=150000, pixel=False, action
         if num_stack is not None:
             env = FrameStack(env, num_stack=num_stack, img_size=image_size)
 
-    # for i in range(300):
-    #     env.reset(seed=seed)
+    for i in range(300):
+        env.reset(seed=seed)
 
     # Dummy observation_space/action_space (nur für Agent.create)
     obs_sample, _ = env.reset(seed=seed)
     if pixel:
-        scaling=(2,2,4)
+        scaling=(2,2,3)
         obs_sample = convert_obs_pixel(obs_sample)
         action_space_flat = Box(low=-2.0, high=2.0, shape=(3,), dtype=np.float32)
         

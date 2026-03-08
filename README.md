@@ -1,98 +1,43 @@
-# Reinforcement Learning with Prior Data (RLPD)
+# Offline-to-Online Reinforcement Learning – Excavator Pick Up Stone
 
-![alt text](assets/plots.png "Title")
+Simulation-based reinforcement learning using **AGX Dynamics**  
+Task: Excavator picks up a stone and lifts it stably
 
-This is code to accompany the paper "Efficient Online Reinforcement Learning with Offline Data", available [here](https://arxiv.org/abs/2302.02948). This code can be readily adapted to work on any offline dataset.
+<p align="center">
+  <img src="output_3x_klein.gif" alt="Excavator picking up stone – triple view" width="720"/>
+  <br><em>Short demo (~15 seconds): Trained policy picking up a stone (triple view)</em>
+</p>
 
-# Installation
+## Environment
 
-```bash
-conda create -n rlpd python=3.9 # If you use conda.
-conda activate rlpd
-conda install patchelf  # If you use conda.
-pip install -r requirements.txt
-conda deactivate
-conda activate rlpd
-```
+- Physics engine: **AGX Dynamics**
+- Randomized every episode:
+  - Stone position (x, y)
+  - Stone rotation around z-axis
+  - Initial joint angles (boom, arm, bucket)
+- Observation spaces:
+  - **State-based**: stone (x, y, θ_z) + joint angles (boom, arm, bucket) → 6 dimensions
+  - **Vision-based**: RGB image (camera view from cabin) + joint angles (6 dimensions)
+- Actions: joint velocities (Δ boom, Δ arm, Δ bucket) → 3 continuous dimensions
 
-# Experiments
+## Reward Functions – Comparison
 
-## D4RL Locomotion
+Three reward variants are evaluated:
 
-```bash
-XLA_PYTHON_CLIENT_PREALLOCATE=false python train_finetuning.py --env_name=halfcheetah-expert-v0 \
-                --utd_ratio=20 \
-                --start_training 5000 \
-                --max_steps 250000 \
-                --config=configs/rlpd_config.py \
-                --project_name=rlpd_locomotion
-```
+- **Sparse**:  
+  +1 reward only when success (stone stably lifted) at the very end of the episode, 0 otherwise
 
-## D4RL Antmaze
-```bash
-XLA_PYTHON_CLIENT_PREALLOCATE=false python train_finetuning.py --env_name=antmaze-umaze-v2 \
-                --utd_ratio=20 \
-                --start_training 5000 \
-                --max_steps 300000 \
-                --config=configs/rlpd_config.py \
-                --config.backup_entropy=False \
-                --config.hidden_dims="(256, 256, 256)" \
-                --config.num_min_qs=1 \
-                --project_name=rlpd_antmaze
-```
+- **Middle**:  
+  Stone height clipped between 0 and 1.7 m, normalized to [0,1]  
+  + additional small bonus when stone is stable
 
-## Adroit Binary
+- **Dense**:  
+  Same as middle reward  
+  + shaped term based on distance between bucket and stone
 
-First, download and unzip `.npy` files into `~/.datasets/awac-data/` from [here](https://drive.google.com/file/d/1SsVaQKZnY5UkuR78WrInp9XxTdKHbF0x/view).
+## Vision-based Experiments
 
-Make sure you have `mjrl` installed:
-```bash
-git clone https://github.com/aravindr93/mjrl
-cd mjrl
-pip install -e .
-```
+Two approaches compared:
 
-Then, recursively clone `mj_envs` from this fork:
-```bash
-git clone --recursive https://github.com/philipjball/mj_envs.git
-```
-
-Then sync the submodules (add the `--init` flag if you didn't recursively clone):
-```bash
-$ cd mj_envs  
-$ git submodule update --remote
-```
-
-Finally:
-```bash
-$ pip install -e .
-```
-
-Now you can run the following in this directory
-```bash
-XLA_PYTHON_CLIENT_PREALLOCATE=false python train_finetuning.py --env_name=pen-binary-v0 \
-                --utd_ratio=20 \
-                --start_training 5000 \
-                --max_steps 1000000 \
-                --config=configs/rlpd_config.py \
-                --config.backup_entropy=False \
-                --config.hidden_dims="(256, 256, 256)" \
-                --project_name=rlpd_adroit
-```
-
-
-## V-D4RL
-
-These are pixel-based datasets for offline RL ([paper here](https://arxiv.org/abs/2206.04779)).
-
-Download the `64px` Main V-D4RL datsets into `~/.vd4rl` [here](https://drive.google.com/drive/folders/15HpW6nlJexJP5A4ygGk-1plqt9XdcWGI) or [here](https://huggingface.co/datasets/conglu/vd4rl).
-
-For instance, the Medium Cheetah Run `.npz` files should be in `~/.vd4rl/main/cheetah_run/medium/64px`.
-
-```bash
-XLA_PYTHON_CLIENT_PREALLOCATE=false python train_finetuning_pixels.py --env_name=cheetah-run-v0 \
-                --start_training 5000 \
-                --max_steps 300000 \
-                --config=configs/rlpd_pixels_config.py \
-                --project_name=rlpd_vd4rl
-```
+- Pretrained ResNet18 (ImageNet weights)  
+- ResNet18 trained end-to-end with **DrQ-v2** style augmentation

@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 import os
 
-# os.environ["WANDB_MODE"] = "disabled"
+os.environ["WANDB_MODE"] = "disabled"
 import wandb
 
 import pickle
