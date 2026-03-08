@@ -41,3 +41,6 @@ Two approaches compared:
 
 - Pretrained ResNet18 (ImageNet weights)  
 - ResNet18 trained end-to-end with **DrQ-v2** style augmentation
+
+
+Results will be published soon
