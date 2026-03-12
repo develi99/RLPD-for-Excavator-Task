@@ -39,7 +39,7 @@ Three reward variants are evaluated:
 Two approaches compared:
 
 - Pretrained ResNet18 (ImageNet weights)  
-- ResNet18 trained end-to-end with **DrQ-v2** style augmentation
+- Simple CNN Encoder trained with **DrQ-v2** style augmentation
 
 
 Results will be published soon
