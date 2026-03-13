@@ -1,9 +1,11 @@
 from ml_collections.config_dict import config_dict
 
 from configs import td_config
+import ml_collections
 
 
 def get_config():
+    # config = ml_collections.ConfigDict()
     config = td_config.get_config()
 
     config.model_cls = "SACLearner"

@@ -28,7 +28,7 @@
 
 # XLA_PYTHON_CLIENT_PREALLOCATE=false uv run train_finetuning.py --utd_ratio=4 --start_training 5000                 --max_steps 500000                 --config=configs/rlpd_config.py                 --config.backup_entropy=False                 --config.hidden_dims="(512,512)"                 --config.num_min_qs=2  --config.num_qs=2 --log_dir /home/elias/Masterstudium/DeepLearningRobotics/rlpd/logs/state/run16/checkpoints --name Reward3UTD4 --agxreward 3 --seed 2
 
-# XLA_PYTHON_CLIENT_PREALLOCATE=false uv run train_finetuning.py --utd_ratio=2 --start_training 5000                 --max_steps 500000                 --config=configs/rlpd_config.py                 --config.backup_entropy=False                 --config.hidden_dims="(512,512)"                 --config.num_min_qs=2  --config.num_qs=2 --log_dir /home/elias/Masterstudium/DeepLearningRobotics/rlpd/logs/state/run17/checkpoints --name Reward5 --agxreward 5 --seed 0
+XLA_PYTHON_CLIENT_PREALLOCATE=false uv run train_finetuning.py --utd_ratio=2 --start_training 5000                 --max_steps 100001                 --config=configs/rlpd_config.py                 --config.backup_entropy=False                 --config.hidden_dims="(512,512)"                 --config.num_min_qs=2  --config.num_qs=2 --log_dir /home/elias/Masterstudium/DeepLearningRobotics/rlpd/logs/state_not_curriculum/run17/checkpoints --name Reward5 --agxreward 5 --seed 0
 
 # XLA_PYTHON_CLIENT_PREALLOCATE=false uv run train_finetuning.py --utd_ratio=2 --start_training 5000                 --max_steps 500000                 --config=configs/rlpd_config.py                 --config.backup_entropy=False                 --config.hidden_dims="(512,512)"                 --config.num_min_qs=2  --config.num_qs=2 --log_dir /home/elias/Masterstudium/DeepLearningRobotics/rlpd/logs/state/run18/checkpoints --name Reward5 --agxreward 5 --seed 1
 
@@ -40,6 +40,20 @@
 
 # Test if i get same results as before
 # XLA_PYTHON_CLIENT_PREALLOCATE=false uv run train_finetuning.py --utd_ratio=2 --start_training 5000                 --max_steps 500000                 --config=configs/rlpd_config.py                 --config.backup_entropy=False                 --config.hidden_dims="(512,512)"                 --config.num_min_qs=2  --config.num_qs=2 --log_dir /home/elias/Masterstudium/DeepLearningRobotics/rlpd/logs/state/run11/checkpoints --name Reward5 --agxreward 5 --seed 0
+# Reward 50 UTD4 TestRun
+# XLA_PYTHON_CLIENT_PREALLOCATE=false uv run train_finetuning.py --utd_ratio=4 --start_training 5000                 --max_steps 1000000                 --config=configs/rlpd_config.py                 --config.backup_entropy=False                 --config.hidden_dims="(512,512)"                 --config.num_min_qs=2  --config.num_qs=2 --log_dir /home/elias/Masterstudium/DeepLearningRobotics/rlpd/logs/state/run21/checkpoints --name Reward5 --agxreward 5 --seed 4
+
+# Decreased TempretureLR
+# XLA_PYTHON_CLIENT_PREALLOCATE=false uv run train_finetuning.py --utd_ratio=2 --start_training 5000                 --max_steps 1000000                 --config=configs/rlpd_config.py                 --config.backup_entropy=False                 --config.hidden_dims="(512,512)"                 --config.num_min_qs=2  --config.num_qs=2 --log_dir /home/elias/Masterstudium/DeepLearningRobotics/rlpd/logs/state/run21/checkpoints --name Reward5 --agxreward 5 --seed 4
+
+# XLA_PYTHON_CLIENT_PREALLOCATE=false uv run train_finetuning.py --utd_ratio=2 --start_training 5000                 --max_steps 1000000                 --config=configs/rlpd_config.py                 --config.backup_entropy=False                 --config.hidden_dims="(512,512)"                 --config.num_min_qs=2  --config.num_qs=2 --log_dir /home/elias/Masterstudium/DeepLearningRobotics/rlpd/logs/state/run21/checkpoints --name Reward5 --agxreward 5 --seed 5
+
+# XLA_PYTHON_CLIENT_PREALLOCATE=false uv run train_finetuning.py --utd_ratio=2 --start_training 5000                 --max_steps 1000000                 --config=configs/rlpd_config.py                 --config.backup_entropy=False                 --config.hidden_dims="(512,512)"                 --config.num_min_qs=2  --config.num_qs=2 --log_dir /home/elias/Masterstudium/DeepLearningRobotics/rlpd/logs/state/run22/checkpoints --name Reward5 --agxreward 5 --seed 6
+
+# XLA_PYTHON_CLIENT_PREALLOCATE=false uv run train_finetuning.py --utd_ratio=2 --start_training 5000                 --max_steps 1000000                 --config=configs/rlpd_config.py                 --config.backup_entropy=False                 --config.hidden_dims="(512,512)"                 --config.num_min_qs=2  --config.num_qs=2 --log_dir /home/elias/Masterstudium/DeepLearningRobotics/rlpd/logs/state/run23/checkpoints --name Reward5 --agxreward 5 --seed 7
+
+
+
 
 
 # Dont forget to change the log_dir and name for the eval_policy.py runs as well, otherwise it will look for the wrong checkpoints and/or overwrite the eval logs

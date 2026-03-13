@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 import os
 
-os.environ["WANDB_MODE"] = "disabled"
+# os.environ["WANDB_MODE"] = "disabled"
 import wandb
 
 import pickle
@@ -195,7 +195,7 @@ def main(_):
     done = False
     observation = convert_obs(observation)
     for i in tqdm.tqdm(
-        range(0, FLAGS.max_steps+1), smoothing=0.1, disable=not FLAGS.tqdm
+        range(1, FLAGS.max_steps+1), smoothing=0.1, disable=not FLAGS.tqdm
     ):
         if i < FLAGS.start_training:
             action = action_space_flat.sample()

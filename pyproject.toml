@@ -8,6 +8,7 @@ dependencies = [
     "flax>=0.10.7",
     "gym>=0.26.2",
     "gymnasium>=1.2.3",
+    "jax-resnet>=0.0.4",
     "jax[cuda12]>=0.6.2",
     "ml-collections>=1.1.0",
     "opencv-python>=4.13.0.92",
@@ -15,6 +16,7 @@ dependencies = [
     "tensorflow-probability[jax]>=0.25.0",
     "torch>=2.10.0",
     "tqdm>=4.67.3",
+    "transformers[flax]>=5.3.0",
 ]
 [tool.uv.sources.jax-cuda]
 url = "https://storage.googleapis.com/jax-releases/jax_cuda_releases.html"

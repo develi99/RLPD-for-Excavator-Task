@@ -21,6 +21,7 @@ import pickle
 import wandb
 from rlpd.agents import DrQLearner
 from rlpd.agents import DrMAgent
+from rlpd.agents import FeatureDrQLearner
 
 from rlpd.data.vd4rl_datasets import VD4RLDataset
 from rlpd.evaluation import evaluate_policy
@@ -96,24 +97,6 @@ PLANET_ACTION_REPEAT = {
 }
 
 
-# def combine(one_dict, other_dict):
-#     combined = {}
-
-#     for k, v in one_dict.items():
-#         if isinstance(v, FrozenDict):
-#             if len(v) == 0:
-#                 combined[k] = v
-#             else:
-#                 combined[k] = combine(v, other_dict[k])
-#         else:
-#             tmp = np.empty(
-#                 (v.shape[0] + other_dict[k].shape[0], *v.shape[1:]), dtype=v.dtype
-#             )
-#             tmp[0::2] = v
-#             tmp[1::2] = other_dict[k]
-#             combined[k] = tmp
-
-#     return FrozenDict(combined)
 def combine(one_dict, other_dict):
     combined = {}
 

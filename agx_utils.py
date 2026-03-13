@@ -10,6 +10,7 @@ from rewards import calc_reward
 import agxcave.agxtasks.excavator.rock_capturing.config.rock_capturing_cfg as agxrewards
 import random
 import torch
+from rlpd.networks.encoders.d4pg_encoder import ResNet18Encoder
 
 def set_global_seed(seed: int):
     # Python RNG
@@ -88,7 +89,7 @@ def demos_to_dataset(demos, reward=0):
     return dataset
 
 
-def demos_to_pixel_dataset(demos, num_stack=3, img_size=64, reward=0):
+def demos_to_pixel_dataset(demos, num_stack=3, img_size=64, reward=0, pretrain=False):
     obs, actions, rewards, terminals, next_obs = [], [], [], [], []
 
     for traj in demos:
