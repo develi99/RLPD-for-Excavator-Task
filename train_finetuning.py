@@ -1,6 +1,8 @@
 #! /usr/bin/env python
 import os
 
+from jax import config
+
 # os.environ["WANDB_MODE"] = "disabled"
 import wandb
 

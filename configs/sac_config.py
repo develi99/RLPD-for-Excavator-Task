@@ -5,7 +5,6 @@ import ml_collections
 
 
 def get_config():
-    # config = ml_collections.ConfigDict()
     config = td_config.get_config()
 
     config.model_cls = "SACLearner"

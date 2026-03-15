@@ -88,7 +88,7 @@ def log_evaluation(agent, env, episodes=25, pixel=False, show_reward=True, seed=
     return results
 
 
-def evaluate_policy(agent, env, episodes=25, pixel=False, show_rewards=False, seed=0, scaling=(2,2,2)):
+def evaluate_policy(agent, env, episodes=25, pixel=False, show_rewards=False, seed=0, scaling=(2,2,2), encoder=None):
 
     # fixed termination keys (same as original eval)
     termination_keys = {
@@ -121,7 +121,7 @@ def evaluate_policy(agent, env, episodes=25, pixel=False, show_rewards=False, se
         obs, info = env.reset(seed=seed)
 
         if pixel:
-            obs = convert_obs_pixel(obs)
+            obs = convert_obs_pixel(obs, encoder)
         else:
             obs = convert_obs(obs)
 
@@ -178,7 +178,7 @@ def evaluate_policy(agent, env, episodes=25, pixel=False, show_rewards=False, se
             ep_return += reward
 
             if pixel:
-                next_obs = convert_obs_pixel(next_obs)
+                next_obs = convert_obs_pixel(next_obs, encoder)
             else:
                 next_obs = convert_obs(next_obs)
 

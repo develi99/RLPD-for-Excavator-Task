@@ -27,3 +27,54 @@ class D4PGEncoder(nn.Module):
             x = nn.relu(x)
 
         return x.reshape((*x.shape[:-3], -1))
+
+
+
+
+
+
+
+
+import jax
+from flaxmodels.resnet import ResNet18
+
+# class ResNet18Encoder(nn.Module):
+#     layer: str = "block3_1"
+#     train: bool = False
+
+#     def setup(self):
+#         self.model = ResNet18(output="activations", pretrained="imagenet")
+        
+
+#     def __call__(self, x, train: bool = False):
+
+#         feats = self.model(x, train=train)  # jetzt train kommt von Argument
+#         x = feats[self.layer]
+#         x = x.reshape((x.shape[0], -1))  # Flatten
+        
+#         # remove batch dim if B=1 (PixelMultiplexer init case)
+#         if x.shape[0] == 1:
+#             x = x[0]
+
+#         return x
+
+class ResNet18Encoder(nn.Module):
+    layer: str = "block3_1"
+    train: bool = False
+
+    def setup(self):
+        self.model = ResNet18(output="activations", pretrained="imagenet")
+
+    def __call__(self, x, train: bool = False):
+        feats = self.model(x, train=train)
+        x = feats[self.layer]
+        x = x.reshape((x.shape[0], -1))  # Flatten
+
+        # remove batch dim if B=1 (PixelMultiplexer init case)
+        if x.shape[0] == 1:
+            x = x[0]
+
+        return x
+
+    def make_forward(self, variables):
+        self.forward = jax.jit(lambda x: self.apply(variables, x, train=False))

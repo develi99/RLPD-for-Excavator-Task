@@ -67,8 +67,8 @@ def run_policy(save_dir, episodes=5, jax=False, step=150000, pixel=False, action
         if num_stack is not None:
             env = FrameStack(env, num_stack=num_stack, img_size=image_size)
 
-    for i in range(300):
-        env.reset(seed=seed)
+    # for i in range(300):
+    #     env.reset(seed=seed)
 
     # Dummy observation_space/action_space (nur für Agent.create)
     obs_sample, _ = env.reset(seed=seed)
@@ -84,6 +84,9 @@ def run_policy(save_dir, episodes=5, jax=False, step=150000, pixel=False, action
         config.num_min_qs=2
         config.num_qs=2
         config.backup_entropy=False
+        config.cnn_features = (16, 32, 64, 32)# (32, 64, 128, 256)
+        config.cnn_filters = (3, 3, 3, 1)
+        config.cnn_strides = (2, 2, 2, 1)
 
         kwargs = dict(config)
         model_cls = kwargs.pop("model_cls")

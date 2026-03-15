@@ -1,5 +1,6 @@
 #! /usr/bin/env python
 # import dmcgym
+from logging import config
 import os
 # os.environ["WANDB_MODE"] = "disabled"
 import gym
@@ -11,6 +12,7 @@ from ml_collections import config_flags
 from flax.core import unfreeze
 from rlpd.data.replay_buffer_sample import ReplayBufferSample
 from rlpd.data.memory_efficient_replay_buffer_sample import MemoryEfficientReplayBufferSample
+from rlpd.data.replay_buffer_pretrained import FeatureReplayBufferSample
 
 try:
     from flax.training import checkpoints
@@ -26,13 +28,16 @@ from rlpd.agents import FeatureDrQLearner
 from rlpd.data.vd4rl_datasets import VD4RLDataset
 from rlpd.evaluation import evaluate_policy
 from rlpd.wrappers import WANDBVideo, wrap_pixels
-from agx_utils import make_agx_env_and_dataset, normalize_actions, convert_obs_pixel, sample_pixel_batch, set_global_seed
+from agx_utils import make_agx_env_and_dataset, normalize_actions, convert_obs_pixel, sample_pixel_batch, set_global_seed, convert_obs_feature
 from gym.spaces import Box
 
 # Env Wrapper
 from rlpd.wrappers.repeat_action import RepeatAction
 from rlpd.wrappers.frame_stack import FrameStack
 from configs.rlpd_pixels_config import get_config
+
+from rlpd.networks.encoders import ResNet18Encoder
+
 
 FLAGS = flags.FLAGS
 
@@ -78,6 +83,8 @@ flags.DEFINE_boolean("checkpoint_model", True, "Save agent checkpoint on evaluat
 flags.DEFINE_boolean(
     "checkpoint_buffer", False, "Save agent replay buffer on evaluation."
 )
+flags.DEFINE_boolean("pretrained", False, "Use pretrained encoder.")
+flags.DEFINE_integer("percentage", 100, "Percentage of samples")
 
 config_flags.DEFINE_config_file(
     "config",
@@ -143,12 +150,17 @@ def main(_):
             camera_id=camera_id,
         )
 
-    env, _, ds, _ = make_agx_env_and_dataset(FLAGS.env_name, FLAGS.demo_dir, image_size=FLAGS.image_size, num_stack=FLAGS.num_stack, pixel=True, reward=FLAGS.agxreward)
+    if FLAGS.pretrained:
+        encoder = ResNet18Encoder(train=False)
+    else:
+        encoder = None
+
+    env, _, ds, _ = make_agx_env_and_dataset(FLAGS.env_name, FLAGS.demo_dir, image_size=FLAGS.image_size, num_stack=FLAGS.num_stack, pixel=True, reward=FLAGS.agxreward, encoder=encoder, pretrain=FLAGS.pretrained, percentage=FLAGS.percentage, seed=FLAGS.seed)
     if action_repeat > 1:
         env = RepeatAction(env, action_repeat)
     if FLAGS.num_stack is not None:
         env = FrameStack(env, num_stack=FLAGS.num_stack, img_size=FLAGS.image_size)
-    
+
     action_space_flat = Box(low=-2.0, high=2.0, shape=ds["actions"][0].shape, dtype=np.float32)
     action_space_flat.seed(FLAGS.seed)
 
@@ -178,9 +190,15 @@ def main(_):
 
     replay_buffer_size = FLAGS.replay_buffer_size or FLAGS.max_steps // action_repeat
     if FLAGS.memory_efficient_replay_buffer:
-        replay_buffer = MemoryEfficientReplayBufferSample(
-            ds["observations"][0], ds["actions"][0], replay_buffer_size
-        )
+        if FLAGS.pretrained:
+            replay_buffer = FeatureReplayBufferSample(
+                ds["observations"][0], ds["actions"][0], replay_buffer_size
+            )
+        else:
+            replay_buffer = MemoryEfficientReplayBufferSample(
+                ds["observations"][0], ds["actions"][0], replay_buffer_size
+            )
+
         # replay_buffer_iterator = replay_buffer.get_iterator(
         #     sample_args={
         #         "batch_size": int(
@@ -210,6 +228,14 @@ def main(_):
     if model_cls == "DrMAgent":
         agent = DrMAgent(**kwargs)
 
+    elif model_cls == "FeatureDrQLearner":
+        agent = globals()[model_cls].create(
+            seed=FLAGS.seed,
+            observations=ds["observations"][0],
+            actions=ds["actions"][0],
+            **kwargs,
+        )
+
     else:
         agent = globals()[model_cls].create(
             seed=FLAGS.seed,
@@ -221,7 +247,7 @@ def main(_):
 
     observation, _ = env.reset(seed=FLAGS.seed)
     done = False
-    observation = convert_obs_pixel(observation)
+    observation = convert_obs_pixel(observation, encoder)
     for i in tqdm.tqdm(
         range(1, FLAGS.max_steps // action_repeat + 1),
         smoothing=0.1,
@@ -231,11 +257,19 @@ def main(_):
             action = action_space_flat.sample()
             action = normalize_actions(action, low=-2.0, high=2.0)
         else:
-            action, agent = agent.sample_actions(observation)
-            action = np.clip(action, -1.0, 1.0) # just to be sure
+            # ---- batch dimension hinzufügen ----
+            # batched_obs = {
+            #     k: np.expand_dims(v, axis=0)
+            #     for k, v in observation.items()
+            # }
 
+            action, agent = agent.sample_actions(observation)
+            
+            action = action
+            action = np.clip(action, -1.0, 1.0)
+        
         next_obs, reward, terminated, truncated, info = env.step([action[0]*2, action[1]*2 ,action[2]*2 ,0 ,0]) # upscaling because of normalization
-        next_obs = convert_obs_pixel(next_obs)
+        next_obs = convert_obs_pixel(next_obs, encoder)
 
         done = terminated or truncated
 
@@ -259,7 +293,7 @@ def main(_):
         if done:
             observation, _ = env.reset(seed=FLAGS.seed)
             done = False
-            observation = convert_obs_pixel(observation)
+            observation = convert_obs_pixel(observation, encoder)
             # for k, v in info["episode"].items():
             #     decode = {"r": "return", "l": "length", "t": "time"}
             #     wandb.log({f"training/{decode[k]}": v}, step=i * action_repeat)
@@ -281,7 +315,7 @@ def main(_):
                     wandb.log({f"training/{k}": v}, step=i * action_repeat)
 
         if i % FLAGS.eval_interval == 0:
-            eval_info = evaluate_policy(agent, env, episodes=FLAGS.eval_episodes, pixel=True)
+            eval_info = evaluate_policy(agent, env, episodes=FLAGS.eval_episodes, pixel=True, encoder=encoder)
 
             for k, v in eval_info.items():
                 wandb.log({f"evaluation/{k}": v}, step=i * action_repeat)
