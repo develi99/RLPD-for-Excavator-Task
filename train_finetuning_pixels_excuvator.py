@@ -267,7 +267,7 @@ def main(_):
             
             action = action
             action = np.clip(action, -1.0, 1.0)
-        
+
         next_obs, reward, terminated, truncated, info = env.step([action[0]*2, action[1]*2 ,action[2]*2 ,0 ,0]) # upscaling because of normalization
         next_obs = convert_obs_pixel(next_obs, encoder)
 
