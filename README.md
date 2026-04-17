@@ -98,7 +98,7 @@ Two perception pipelines are evaluated for image-based policies:
 ---
 
 ## Results
-The showcased policy (see video above) was vision based trained with drqv2-style augemntations and **only 25 demonstrations** (about 14 hours online training with rtx 4060) and achieves:
+The showcased policy (see video above) was vision based trained with drqv2-style augmentations and **only 25 demonstrations** (about 14 hours online training with rtx 4060) and achieves:
 - **96% success rate** (stable hold condition)  
 - **100% rock lifted ratio**
 
@@ -111,3 +111,4 @@ This project provides a structured comparison of:
 - Representation learning (pretrained vs. learned encoders)  
 
 with the goal of improving sim-to-real transfer for robotic excavation tasks.
+The exact results will be published soon.
